@@ -54,7 +54,13 @@ class DeviceResource extends Resource
             ->columns([
                 TextColumn::make('machine.name')->searchable(),
                 TextColumn::make('serial')->searchable(),
-                TextColumn::make('name')->searchable(),
+                TextColumn::make('name')
+                    ->label('Name')
+                    ->formatStateUsing(function ($state, $record) {
+                        return "{$record->id}-{$record->model}-{$record->machine->name}";
+                    })
+                    ->searchable(),
+
                 TextColumn::make('model')->searchable(),
                 TextColumn::make('status')->badge()->color(fn ($state) => match ($state) {
                     'connected' => 'success',

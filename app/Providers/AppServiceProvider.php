@@ -26,6 +26,9 @@ class AppServiceProvider extends ServiceProvider
                 NavigationGroup::make()
                      ->label('Account Management')
                      ->icon('heroicon-o-users')->collapsed(true),
+                NavigationGroup::make()
+                     ->label('Content Management')
+                     ->icon('heroicon-o-chat-bubble-left-right')->collapsed(true),
             ]);
         });
     }
