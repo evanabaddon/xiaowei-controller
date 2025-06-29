@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'gemini_ai' => [
+        'project_id' => env('GEMINI_API_KEY'),
+    ],
+
 ];
