@@ -2,8 +2,9 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\ServiceProvider;
 use Filament\Facades\Filament;
+use App\Services\WebSocketPool;
+use Illuminate\Support\ServiceProvider;
 use Filament\Navigation\NavigationGroup;
 
 class AppServiceProvider extends ServiceProvider
@@ -30,6 +31,10 @@ class AppServiceProvider extends ServiceProvider
                      ->label('Content Management')
                      ->icon('heroicon-o-chat-bubble-left-right')->collapsed(true),
             ]);
+        });
+
+        app()->terminating(function () {
+            WebSocketPool::closeAll();
         });
     }
 }

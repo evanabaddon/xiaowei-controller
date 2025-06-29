@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
-use WebSocket\Client;
+use App\Services\WebSocketPool;
 
 class Device extends Model
 {
@@ -15,6 +15,8 @@ class Device extends Model
         'model',
         'status',
         'last_seen_at',
+        'ip_address',
+        'ssid',
     ];
 
     public function machine()
@@ -24,169 +26,153 @@ class Device extends Model
 
     public function getInstalledApps(): array
     {
-        \Log::info("📡 Connecting to {$this->machine->ws_url} for device {$this->serial}");
+        Log::info("📡 Requesting installed apps for {$this->serial}");
+
+        $client = WebSocketPool::getClient($this->machine->ws_url);
+        if (!$client) return [];
 
         try {
-            $client = new Client($this->machine->ws_url, ['timeout' => 5]);
-
             $client->send(json_encode([
                 'action' => 'apkList',
                 'devices' => $this->serial,
             ]));
 
-            $responseRaw = $client->receive();
-            \Log::info("📦 Response: $responseRaw");
+            $response = json_decode($client->receive(), true);
 
-            $response = json_decode($responseRaw, true);
-            $client->close();
-
-            if (
-                $response['code'] === 10000 &&
-                isset($response['data'][$this->serial]) &&
-                is_array($response['data'][$this->serial])
-            ) {
-                return $response['data'][$this->serial];
-            }
-
-            \Log::warning("⚠️ Unexpected response structure: " . json_encode($response));
-            return [];
+            return $response['code'] === 10000
+                && isset($response['data'][$this->serial])
+                ? $response['data'][$this->serial]
+                : [];
         } catch (\Exception $e) {
-            \Log::warning("❌ Failed to get apps for {$this->serial}: {$e->getMessage()}");
+            Log::warning("❌ Failed to get apps for {$this->serial}: {$e->getMessage()}");
             return [];
         }
     }
 
     public function getLastScreenshot(): ?string
     {
-        try {
-            $client = new Client($this->machine->ws_url, ['timeout' => 5]);
+        $client = WebSocketPool::getClient($this->machine->ws_url);
+        if (!$client) return null;
 
+        try {
             $client->send(json_encode([
                 'action' => 'screen',
                 'devices' => $this->serial,
-                'data' => [
-                    'savePath' => "D:\\Pictures",
-                ],
+                'data' => ['savePath' => "D:\\Pictures"],
             ]));
 
             $response = json_decode($client->receive(), true);
-            $client->close();
+            if ($response['code'] !== 10000) return null;
 
-            if ($response['code'] !== 10000) {
-                \Log::warning("❌ Screenshot request failed for device {$this->serial}");
-                return null;
-            }
-
-            // Path to expected image
             $imagePath = "D:\\Pictures\\{$this->serial}.png";
-            if (!file_exists($imagePath)) {
-                \Log::warning("⚠️ Screenshot file not found at {$imagePath}");
-                return null;
-            }
+            if (!file_exists($imagePath)) return null;
 
-            // Encode to base64 to display in browser
-            $imageData = file_get_contents($imagePath);
-            return 'data:image/png;base64,' . base64_encode($imageData);
+            return 'data:image/png;base64,' . base64_encode(file_get_contents($imagePath));
         } catch (\Exception $e) {
-            \Log::warning("⚠️ Failed to get screenshot for {$this->serial}: {$e->getMessage()}");
+            Log::warning("⚠️ Screenshot error for {$this->serial}: {$e->getMessage()}");
             return null;
         }
     }
 
+    /**
+     * Status koneksi internet perangkat.
+     * Tidak akan melakukan koneksi WebSocket kecuali jika ada cache.
+     */
     public function getConnectionStatus(): string
     {
-        return cache()->remember("ping_status_{$this->serial}", now()->addSeconds(30), function () {
-            try {
-                \Log::info("🌐 Pinging internet from {$this->serial}");
+        $cacheKey = "ping_status_{$this->serial}";
 
-                $client = new \WebSocket\Client($this->machine->ws_url, ['timeout' => 5]);
-                $client->send(json_encode([
-                    'action' => 'adb',
-                    'devices' => $this->serial,
-                    'data' => [
-                        'command' => 'adb exec-out ping -c 1 8.8.8.8',
-                    ]
-                ]));
+        if (cache()->has($cacheKey)) {
+            return cache()->get($cacheKey);
+        }
 
-                $response = json_decode($client->receive(), true);
-                $client->close();
-
-                $result = $response['data'][$this->serial] ?? '';
-
-                if (str_contains($result, 'bytes from')) {
-                    return 'Connected';
-                } elseif (str_contains($result, 'unknown host') || str_contains($result, '100% packet loss')) {
-                    return 'No Internet';
-                }
-
-                return 'Disconnected';
-            } catch (\Exception $e) {
-                \Log::warning("❌ Ping failed for {$this->serial}: {$e->getMessage()}");
-                return 'Error';
-            }
-        });
+        return $this->ip_address ? 'Connected' : 'Disconnected';
     }
 
+    /**
+     * Paksa update status koneksi dan cache-nya via ping.
+     */
     public function refreshConnectionStatus(bool $force = false): void
     {
-        cache()->forget("ping_status_{$this->serial}");
-        $this->getConnectionStatus(); // Akan cache ulang
+        $cacheKey = "ping_status_{$this->serial}";
+        cache()->forget($cacheKey);
+
+        if ($force) {
+            $status = $this->doPingCheck();
+            cache()->put($cacheKey, $status, now()->addMinutes(2));
+        }
     }
 
+    /**
+     * Ping Google DNS untuk cek koneksi internet.
+     */
+    protected function doPingCheck(): string
+    {
+        $client = WebSocketPool::getClient($this->machine->ws_url);
+        if (!$client) return 'Error';
+
+        try {
+            $client->send(json_encode([
+                'action' => 'adb',
+                'devices' => $this->serial,
+                'data' => ['command' => 'adb exec-out ping -c 1 8.8.8.8'],
+            ]));
+
+            $response = json_decode($client->receive(), true);
+            $output = $response['data'][$this->serial] ?? '';
+
+            return match (true) {
+                str_contains($output, 'bytes from') => 'Connected',
+                str_contains($output, 'unknown host'), str_contains($output, '100% packet loss') => 'No Internet',
+                default => 'Disconnected',
+            };
+        } catch (\Exception $e) {
+            Log::warning("❌ Ping error for {$this->serial}: {$e->getMessage()}");
+            return 'Error';
+        }
+    }
+
+    /**
+     * Update IP address dan SSID dari device.
+     */
     public function updateNetworkInfo(): void
     {
-        try {
-            $client = new Client($this->machine->ws_url, ['timeout' => 5]);
+        $client = WebSocketPool::getClient($this->machine->ws_url);
+        if (!$client) return;
 
-            // 1. Get IP Address
+        try {
+            // Dapatkan IP
             $client->send(json_encode([
                 'action' => 'adb',
                 'devices' => $this->serial,
-                'data' => [
-                    'command' => 'adb exec-out ip addr show wlan0',
-                ],
+                'data' => ['command' => 'adb exec-out ip addr show wlan0'],
             ]));
-
-            $ipResponse = json_decode($client->receive(), true);
-            $ipOutput = $ipResponse['data'][$this->serial] ?? '';
-            preg_match('/inet\s+(\d+\.\d+\.\d+\.\d+)/', $ipOutput, $match);
+            $ipRaw = json_decode($client->receive(), true)['data'][$this->serial] ?? '';
+            preg_match('/inet\s+(\d+\.\d+\.\d+\.\d+)/', $ipRaw, $match);
             $ip = $match[1] ?? null;
 
-            // 2. Get Wi-Fi SSID (current or stored)
+            // Dapatkan SSID
             $client->send(json_encode([
                 'action' => 'adb',
                 'devices' => $this->serial,
-                'data' => [
-                    'command' => 'adb shell dumpsys wifi | grep SSID',
-                ],
+                'data' => ['command' => 'adb shell dumpsys wifi | grep SSID'],
             ]));
-
-            $wifiResponse = json_decode($client->receive(), true);
-            $wifiOutput = $wifiResponse['data'][$this->serial] ?? '';
-
-            // Cari SSID yang sedang dipakai (mWifiInfo SSID)
-            // Ambil SSID dari mWifiInfo
-            preg_match('/mWifiInfo:\s*\[SSID:\s*([^,\]]+)/', $wifiOutput, $ssidMatch);
+            $ssidRaw = json_decode($client->receive(), true)['data'][$this->serial] ?? '';
+            preg_match('/mWifiInfo:\s*\[SSID:\s*([^,\]]+)/', $ssidRaw, $ssidMatch);
             $ssid = $ssidMatch[1] ?? null;
 
-            // Fallback kalau SSID unknown atau kosong
-            if (!$ssid || str_contains($ssid, '<unknown') || $ssid === '') {
-                preg_match('/ID:\s+\d+\s+SSID:\s+"([^"]+)"/', $wifiOutput, $fallbackMatch);
-                $ssid = $fallbackMatch[1] ?? null;
+            if (!$ssid || str_contains($ssid, '<unknown')) {
+                preg_match('/ID:\s+\d+\s+SSID:\s+"([^"]+)"/', $ssidRaw, $fallback);
+                $ssid = $fallback[1] ?? null;
             }
 
             $this->ip_address = $ip;
             $this->ssid = $ssid;
             $this->save();
 
-            \Log::info("✅ Updated device {$this->serial}: IP = {$ip}, SSID = {$ssid}");
-
-            $client->close();
+            Log::info("✅ Updated {$this->serial} → IP: {$ip}, SSID: {$ssid}");
         } catch (\Exception $e) {
-            \Log::warning("❌ Failed to update network info for {$this->serial}: {$e->getMessage()}");
+            Log::warning("❌ Failed to update network info for {$this->serial}: {$e->getMessage()}");
         }
     }
-
-
-
 }

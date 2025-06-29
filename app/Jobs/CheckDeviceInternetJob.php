@@ -17,6 +17,9 @@ class CheckDeviceInternetJob implements ShouldQueue
 
     protected Device $device;
 
+    public int $tries = 2;
+    public int $timeout = 10;
+
     /**
      * Create a new job instance.
      */
@@ -28,54 +31,63 @@ class CheckDeviceInternetJob implements ShouldQueue
     /**
      * Execute the job.
      */
+    // app/Jobs/CheckDeviceInternetJob.php
     public function handle(): void
     {
         $serial = $this->device->serial;
-        $machine = $this->device->machine;
-        $url = $machine->ws_url;
-
+        
         try {
-            Log::info("📡 Checking internet status for {$serial}");
+            // Gunakan timeout lebih pendek
+            $client = new Client($this->device->machine->ws_url, [
+                'timeout' => 3, // Turunkan dari 5 ke 3 detik
+                'headers' => [
+                    'X-Quick-Check' => '1',
+                    'Connection' => 'close'
+                ]
+            ]);
 
-            $client = new Client($url, ['timeout' => 5]);
+            // Gabungkan semua command dalam satu request
             $client->send(json_encode([
-                'action' => 'adb',
+                'action' => 'multi_command',
                 'devices' => $serial,
                 'data' => [
-                    'command' => 'adb exec-out ip addr show wlan0'
+                    'commands' => [
+                        'ip' => 'adb exec-out ip addr show wlan0',
+                        'ping' => 'adb exec-out ping -c 1 -W 1 8.8.8.8'
+                    ]
                 ]
             ]));
 
             $response = json_decode($client->receive(), true);
             $client->close();
 
-            if ($response['code'] === 10000 && isset($response['data'][$serial])) {
-                $raw = $response['data'][$serial];
-
-                $ip = null;
-                if (preg_match('/inet (\d+\.\d+\.\d+\.\d+)/', $raw, $matches)) {
-                    $ip = $matches[1];
-                }
-
-                $this->device->update([
-                    'internet_ip' => $ip,
-                    'internet_status' => $ip ? 'connected' : 'disconnected',
-                ]);
-            } else {
-                $this->device->update([
-                    'internet_ip' => null,
-                    'internet_status' => 'disconnected',
-                ]);
-            }
-
-        } catch (\Exception $e) {
-            Log::warning("❌ Failed internet check for {$serial}: {$e->getMessage()}");
+            // Proses hasil
+            $ip = $this->extractIp($response['data'][$serial]['ip'] ?? '');
+            $isConnected = str_contains($response['data'][$serial]['ping'] ?? '', 'bytes from');
 
             $this->device->update([
-                'internet_ip' => null,
-                'internet_status' => 'disconnected',
+                'internet_ip' => $ip,
+                'internet_status' => $isConnected ? 'connected' : 'disconnected',
+                'last_checked_at' => now()
             ]);
+
+        } catch (\Exception $e) {
+            \Log::warning("Device check failed: {$serial} - {$e->getMessage()}");
+            $this->handleFailure();
         }
-    
+    }
+
+    private function extractIp(string $output): ?string
+    {
+        preg_match('/inet (\d+\.\d+\.\d+\.\d+)/', $output, $matches);
+        return $matches[1] ?? null;
+    }
+
+    private function handleFailure(): void
+    {
+        $this->device->update([
+            'internet_status' => 'error',
+            'last_error' => now()
+        ]);
     }
 }

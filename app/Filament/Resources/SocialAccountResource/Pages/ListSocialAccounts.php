@@ -3,7 +3,9 @@
 namespace App\Filament\Resources\SocialAccountResource\Pages;
 
 use Filament\Actions;
+use App\Enum\AgeRange;
 use App\Models\Platform;
+use App\Enum\PoliticalLeaning;
 use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ListRecords;
 use App\Filament\Resources\SocialAccountResource;
@@ -23,19 +25,19 @@ class ListSocialAccounts extends ListRecords
     public function getTabs(): array
     {
         $tabs = [
-            'All Platform' => Tab::make()
-                ->label('All')
-                ->modifyQueryUsing(fn (Builder $query) => $query),
+            'all' => Tab::make('All Accounts')
+                ->icon('heroicon-o-user-group')
+                ->badge($this->getModel()::count()),
         ];
-    
+
+        // Tabs by Platform
         foreach (Platform::all() as $platform) {
-            $tabs[$platform->name] = Tab::make()
-                ->label($platform->name)
-                ->modifyQueryUsing(function (Builder $query) use ($platform) {
-                    $query->where('platform_id', $platform->id);
-                });
+            $tabs['platform_'.$platform->id] = Tab::make($platform->name)
+                // ->icon($platform->icon) // Jika ada field icon
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('platform_id', $platform->id))
+                ->badge($this->getModel()::where('platform_id', $platform->id)->count());
         }
-    
+
         return $tabs;
     }
 }

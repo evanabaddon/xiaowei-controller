@@ -3,11 +3,8 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\DeviceResource\Pages;
-use App\Filament\Resources\DeviceResource\RelationManagers;
 use App\Models\Device;
 use App\Models\Machine;
-use Filament\Actions\Action;
-use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -16,13 +13,10 @@ use Filament\Tables\Actions\Action as ActionsAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DeviceResource extends Resource
 {
     protected static ?string $model = Device::class;
-
     protected static ?string $navigationIcon = 'heroicon-o-device-phone-mobile';
 
     public static function canCreate(): bool
@@ -37,64 +31,56 @@ class DeviceResource extends Resource
 
     public static function getNavigationBadgeTooltip(): ?string
     {
-        return 'The number of devices';
+        return 'Total device terdaftar';
     }
 
     public static function form(Form $form): Form
     {
-        return $form
-            ->schema([
-                //
-            ]);
+        return $form->schema([]);
     }
 
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
-                TextColumn::make('machine.name')->searchable(),
+                TextColumn::make('machine.name')->label('Machine')->searchable(),
                 TextColumn::make('serial')->searchable(),
                 TextColumn::make('name')
                     ->label('Name')
-                    ->formatStateUsing(function ($state, $record) {
-                        return "{$record->id}-{$record->model}-{$record->machine->name}";
-                    })
+                    ->formatStateUsing(fn ($state, $record) => "{$record->id}-{$record->model}-{$record->machine->name}")
                     ->searchable(),
 
                 TextColumn::make('model')->searchable(),
+
                 TextColumn::make('status')->badge()->color(fn ($state) => match ($state) {
                     'connected' => 'success',
                     'disconnected' => 'danger',
+                    default => 'gray'
                 }),
-                TextColumn::make('last_seen_at')->dateTime('d-m-Y H:i:s')->hidden(),
+
                 TextColumn::make('connection_status')
-                    ->label('Internet')
-                    ->state(function ($record) {
-                        return $record->getConnectionStatus(); // fungsi yang tadi kamu buat
-                    })
+                    ->label('Internet (Cache)')
+                    ->getStateUsing(fn($record) => cache("ping_status_{$record->serial}"))
                     ->badge()
                     ->color(fn ($state) => match ($state) {
                         'Connected' => 'success',
+                        'No Internet' => 'warning',
                         'Disconnected' => 'danger',
-                        'Unknown' => 'gray',
-                        'Error' => 'warning',
+                        'Error' => 'gray',
+                        default => 'gray',
                     }),
-                TextColumn::make('ip_address')
-                    ->label('IP Address')
-                    ->sortable()
-                    ->searchable(),
 
-                TextColumn::make('ssid')
-                    ->label('SSID')
-                    ->color('gray')
+                TextColumn::make('ip_address')->sortable()->label('IP'),
+                TextColumn::make('ssid')->label('SSID')->color('gray'),
             ])
             ->filters([
                 SelectFilter::make('machine_id')
                     ->options(Machine::all()->pluck('name', 'id'))
                     ->label('Machine')
                     ->searchable()
-                    ->preload()
-                    ->multiple(),
+                    ->multiple()
+                    ->preload(),
+
                 SelectFilter::make('status')
                     ->options([
                         'connected' => 'Connected',
@@ -112,45 +98,60 @@ class DeviceResource extends Resource
                     ]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close'),
-                ActionsAction::make('screen')
-                    ->label('View Screen')
-                    ->icon('heroicon-o-camera')
-                    ->modalHeading('Last Device Screenshot')
-                    ->modalContent(fn (Device $record) => view('filament.resources.device-resource.modals.screenshot', [
-                        'image' => $record->getLastScreenshot(),
-                    ]))
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Close'),
-                ])
+
+                ActionsAction::make('refresh')
+                    ->label('Refresh Device')
+                    ->icon('heroicon-o-arrow-path')
+                    ->action(function (Device $record) {
+                        $record->refreshConnectionStatus(force: true);
+                        $record->updateNetworkInfo();
+
+                        Notification::make()
+                            ->title("Refreshed: {$record->serial}")
+                            ->success()
+                            ->send();
+                    }),
+            ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ])
             ->headerActions([
-                ActionsAction::make('refresh_all_connections')
-                    ->label('🔄 Re-check Connections')
-                    ->action(function () {
-                        $devices = \App\Models\Device::all();
+                // ActionsAction::make('refresh_all_connections')
+                //     ->label('🔄 Re-check Connections')
+                //     ->requiresConfirmation()
+                //     ->color('gray')
+                //     ->action(function () {
+                //         $devices = \App\Models\Device::all();
 
-                        foreach ($devices as $device) {
-                            $device->refreshConnectionStatus(force: true);
-                            $device->updateNetworkInfo();
-                        }
+                //         $success = 0;
+                //         $fail = 0;
 
-                        Notification::make()
-                            ->title('✅ All connections rechecked')
-                            ->success()
-                            ->send();
-                    }),
+                //         foreach ($devices as $device) {
+                //             try {
+                //                 $device->refreshConnectionStatus(force: true);
+                //                 $device->updateNetworkInfo();
+                //                 $success++;
+                //             } catch (\Throwable $e) {
+                //                 \Log::error("❌ Failed recheck for {$device->serial}: " . $e->getMessage());
+                //                 $fail++;
+                //             }
+                //         }
+
+                //         Notification::make()
+                //             ->title("Re-check completed: {$success} success, {$fail} failed.")
+                //             ->success()
+                //             ->send();
+                //     }),
+
+
             ]);
     }
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
@@ -159,5 +160,4 @@ class DeviceResource extends Resource
             'index' => Pages\ListDevices::route('/'),
         ];
     }
-
 }

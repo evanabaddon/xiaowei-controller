@@ -4,16 +4,22 @@ namespace App\Filament\Resources;
 
 use Filament\Forms;
 use Filament\Tables;
+use App\Enum\AgeRange;
 use App\Models\Device;
 use Filament\Forms\Form;
+use App\Enum\ContentTone;
 use Filament\Tables\Table;
 use App\Models\SocialAccount;
+use App\Enum\PoliticalLeaning;
 use Filament\Resources\Resource;
 use Illuminate\Support\Collection;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Fieldset;
 use Filament\Forms\Components\Textarea;
 use Filament\Tables\Actions\BulkAction;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\BadgeColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -80,6 +86,41 @@ class SocialAccountResource extends Resource
                 Textarea::make('notes')
                     ->label('Catatan Tambahan')
                     ->rows(2),
+                    
+                Section::make('Persona Settings')
+                    ->schema([
+                        Fieldset::make('Demografi')
+                            ->schema([
+                                Select::make('persona.age_range')
+                                    ->options([
+                                        '18-25' => '18-25 Tahun',
+                                        '26-35' => '26-35 Tahun',
+                                        '36-45' => '36-45 Tahun',
+                                        '45+' => '45+ Tahun'
+                                    ])
+                                    ->required(),
+                                    
+                               Select::make('persona.political_leaning')
+                                    ->options(PoliticalLeaning::class)
+                                    ->required(),
+                            ])->columns(2),
+    
+                        Fieldset::make('Konten')
+                            ->schema([
+                                TagsInput::make('persona.interests')
+                                    ->separator(','),
+                                    
+                                Select::make('persona.content_tone')
+                                    ->options(ContentTone::class)
+                                    ->required(),
+                            ]),
+    
+                        Textarea::make('persona.persona_description')
+                            ->label('Deskripsi Persona')
+                            ->columnSpanFull()
+                    ])
+                    ->hidden(fn ($operation) => $operation === 'view')
+            
             ]);
     }
 
@@ -96,6 +137,28 @@ class SocialAccountResource extends Resource
                     
                     return "{$device->id}-{$device->model}-{$device->machine->name}";
                 }),
+                TextColumn::make('persona.age_range')
+                    ->label('Age')
+                    ->badge()
+                    ->color('primary'),
+                    
+                TextColumn::make('persona.political_leaning')
+                    ->label('Political')
+                    ->formatStateUsing(fn ($state) => PoliticalLeaning::tryFrom($state)?->label())
+                    ->badge()
+                    ->color(fn ($state) => match($state) {
+                        'pro_government' => 'success',
+                        'opposition' => 'danger',
+                        default => 'gray'
+                    }),
+                    
+                TextColumn::make('persona.content_tone')
+                    ->label('Tone')
+                    ->formatStateUsing(fn ($state) => is_object($state) 
+                        ? $state->label() 
+                        : ContentTone::tryFrom($state)?->label() ?? 'Unknown'
+                    )
+                    ->badge(),
                 TextColumn::make('status')
                     ->badge()
                     ->colors([
@@ -110,6 +173,21 @@ class SocialAccountResource extends Resource
                 SelectFilter::make('accountCategory')
                     ->relationship('accountCategory', 'name')
                     ->label('Kategori Akun'),
+    
+                SelectFilter::make('age_range')
+                    ->label('Range Usia')
+                    ->options(AgeRange::getOptions())
+                    ->relationship('persona', 'age_range'),
+    
+                SelectFilter::make('political_leaning')
+                    ->label('Kecenderungan Politik')
+                    ->options(PoliticalLeaning::getOptions())
+                    ->relationship('persona', 'political_leaning'),
+    
+                SelectFilter::make('content_tone')
+                    ->label('Gaya Konten')
+                    ->options(ContentTone::getOptions()) // Gunakan method yang sudah diperbaiki
+                    ->relationship('persona', 'content_tone'),
 
                 SelectFilter::make('status')
                     ->options([
@@ -121,7 +199,9 @@ class SocialAccountResource extends Resource
                     ->label('Status Akun'),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -176,11 +256,17 @@ class SocialAccountResource extends Resource
         ];
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()->with('persona');
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListSocialAccounts::route('/'),
             'create' => Pages\CreateSocialAccount::route('/create'),
+            'view' => Pages\ViewSocialAccount::route('/{record}'),
             'edit' => Pages\EditSocialAccount::route('/{record}/edit'),
         ];
     }

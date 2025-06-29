@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 
@@ -34,5 +35,20 @@ class SocialAccount extends Model
     public function device()
     {
         return $this->belongsTo(Device::class);
+    }
+    
+    public function persona(): HasOne
+    {
+        return $this->hasOne(AccountPersona::class);
+    }
+
+    public function contentTask()
+    {
+        return $this->hasOne(ContentTask::class);
+    }
+    
+    public function generatedContents()
+    {
+        return $this->hasMany(GeneratedContent::class);
     }
 }

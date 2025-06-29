@@ -27,8 +27,10 @@ class CheckAllDeviceInternetJob implements ShouldQueue
      */
     public function handle(): void
     {
-        foreach (Device::all() as $device) {
-            CheckDeviceInternetJob::dispatch($device);
-        }
+        Device::chunk(50, function ($devices) {
+            foreach ($devices as $device) {
+                CheckDeviceInternetJob::dispatch($device)->onQueue('internet-check');
+            }
+        });
     }
 }
