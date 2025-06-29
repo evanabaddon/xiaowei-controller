@@ -36,11 +36,15 @@ class CommentGenerator extends Page implements HasForms
                 'ollama' => 'Ollama (LLaMA3)',
                 'gemini' => 'Gemini (Google)',
             ])->default('ollama')->statePath('formData.engine')->required(),
-            Textarea::make('caption')->label('Caption Postingan')->required()->statePath('formData.caption'),
+
+            Textarea::make('caption')->label('Caption Postingan')->required()->statePath('formData.caption')->rows(10)
+            ->cols(20),
+
             Select::make('sentiment')->label('Jenis Komentar')->options([
                 'positif' => 'Positif',
                 'negatif' => 'Negatif',
             ])->required()->statePath('formData.sentiment'),
+
             Select::make('style')->label('Gaya Bahasa')->options([
                 'santai' => 'Santai',
                 'netizen' => 'Khas Netizen',
@@ -50,7 +54,9 @@ class CommentGenerator extends Page implements HasForms
                 'bapak-bapak' => 'Bapak-Bapak',
                 'formal' => 'Formal',
             ])->required()->statePath('formData.style'),
+
             Textarea::make('custom_prompt')->label('Instruksi Tambahan')->rows(2)->statePath('formData.custom_prompt'),
+
             TextInput::make('jumlah')->label('Jumlah Komentar')->numeric()->default(5)->required()->maxValue(50)->statePath('formData.jumlah'),
         ];
     }
@@ -87,16 +93,19 @@ EOT;
             $prompt .= "\n\nTambahan instruksi: {$data['custom_prompt']}";
         }
 
+        $this->lastPrompt = $prompt;
+
         \Log::info('[PROMPT]', [
             'engine' => $data['engine'] ?? null,
             'prompt' => $prompt,
         ]);
-        
+        // $this->dispatchBrowserEvent('open-modal', ['id' => 'loading-modal']);
 
         try {
             if ($data['engine'] === 'gemini') {
                 $gemini = new GeminiAIService();
                 $text = $gemini->generateGeminiResponse($prompt);
+                \Log::info('[RAW RESPONSE]', ['raw' => $text]);
                 $parsed = $this->sanitizeAndParseJson($text);
             } else {
                 $endpoint = rtrim(env('OLLAMA_URL', 'http://localhost:11434'), '/') . '/api/chat/';
@@ -111,34 +120,33 @@ EOT;
                         ],
                         'stream' => false,
                     ]);
-            
+
                 $raw = $response->json('message.content');
                 $parsed = $this->sanitizeAndParseJson($raw);
             }
-        
+
             if (!isset($parsed['comments']) || !is_array($parsed['comments'])) {
                 throw new \Exception("❌ Format JSON tidak valid.");
             }
-        
+
             $this->generatedComments = implode("\n", array_map('trim', $parsed['comments']));
+
         } catch (\Throwable $e) {
             \Log::error('[ERROR]', ['exception' => $e, 'last_prompt' => $this->lastPrompt]);
             $this->generatedComments = "[❌ Gagal: {$e->getMessage()}]";
         }
-        
+        // $this->dispatchBrowserEvent('close-modal', ['id' => 'loading-modal']);
     }
+
     protected function sanitizeAndParseJson(string $text): array
     {
-        // Buang blok markdown seperti ```json
         $clean = preg_replace('/^```(?:json)?\s*|```$/m', '', trim($text));
 
-        // Coba cari JSON di dalam teks jika tidak langsung diawali dengan {
         if (strpos($clean, '{') !== 0) {
             preg_match('/\{.*\}/s', $clean, $matches);
             $clean = $matches[0] ?? $clean;
         }
 
-        // Decode JSON
         return json_decode($clean, true, 512, JSON_THROW_ON_ERROR);
     }
 }

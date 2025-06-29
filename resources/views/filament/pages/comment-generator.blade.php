@@ -6,21 +6,32 @@
                 <span wire:loading.remove>🎯 Generate Komentar</span>
                 <span wire:loading>⏳ Sedang membuat komentar...</span>
             </x-filament::button>
-            {{-- <x-filament::button color="warning" wire:click="regenerate" wire:loading.attr="disabled">
-                <span wire:loading.remove>🔁 Regenerasi</span>
-                <span wire:loading>⏳ Regenerasi...</span>
-            </x-filament::button> --}}
         </div>
     </form>
+    <!-- Modal Loading -->
+    <div
+    wire:loading.flex
+    wire:target="generate"
+    class="fixed inset-0 z-50 bg-black/50 flex justify-center items-center"
+    >
+    <div class="flex flex-col items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-sm w-full mx-4 text-center">
+        <x-filament::loading-indicator class="h-8 w-8 text-primary-600 mb-4" />
+        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">
+        Sedang memproses komentar...
+        </h2>
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+        Mohon tunggu sebentar 😊
+        </p>
+    </div>
+    </div>
+
 
     @if ($generatedComments)
         <div class="mt-8">
             <label class="block text-sm font-medium text-gray-700 mb-1 dark:text-white">💬 Hasil Komentar:</label>
-            <pre id="resultBox"
-                class="w-full h-72 p-4 border rounded text-sm overflow-y-auto bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white whitespace-pre-line">
-                {{ $generatedComments }}
-            </pre>
-
+            <div id="resultBox" class="... whitespace-pre-line w-full h-72 p-4 border rounded text-sm overflow-y-auto bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white ">
+                {!! nl2br(e($generatedComments)) !!}
+            </div>
             <x-filament::button color="gray" class="mt-2" onclick="copyText()">
                 📋 Copy All
             </x-filament::button>
