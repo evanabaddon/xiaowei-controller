@@ -31,9 +31,15 @@ class EditSocialAccount extends EditRecord
         $personaData = $data['persona'] ?? [];
         unset($data['persona']);
 
+        // Pastikan JSON fields valid
+        $personaData['interests'] = array_map('trim', explode(',', $personaData['interests'] ?? '[]'));
+        $personaData['age_range'] = (string) ($personaData['age_range'] ?? ''); // pastikan string
+        $personaData['political_leaning'] = (string) ($personaData['political_leaning'] ?? '');
+        $personaData['content_tone'] = (string) ($personaData['content_tone'] ?? '');
+
         parent::handleRecordUpdate($record, $data);
-        
-        // Handle both update and create scenario
+
+        // Update or create persona
         if ($record->persona) {
             $record->persona()->update($personaData);
         } else {
