@@ -26,7 +26,10 @@ class ContentTaskResource extends Resource
 {
     protected static ?string $model = ContentTask::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    // protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationGroup = 'Content Management [AI]';
+
+    protected static ?string $title = 'Content Scheduller';
 
     public static function form(Form $form): Form
     {

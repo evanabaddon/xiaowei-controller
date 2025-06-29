@@ -21,9 +21,9 @@ class CommentGenerator extends Page implements HasForms
     public ?array $formData = [];
     public ?string $generatedComments = null;
 
-    protected static ?string $navigationGroup = 'Content Management';
+    protected static ?string $navigationGroup = 'Content Management [AI]';
 
-    protected static ?string $title = 'AI Comment Generator';
+    protected static ?string $title = 'Comment Generator';
 
     public ?string $lastPrompt = null;
 

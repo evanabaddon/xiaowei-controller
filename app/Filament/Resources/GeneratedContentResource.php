@@ -23,16 +23,21 @@ class GeneratedContentResource extends Resource
 {
     protected static ?string $model = GeneratedContent::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    // protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+
+    protected static ?string $navigationGroup = 'Content Management [AI]';
+
+    protected static ?string $title = 'Content Generator';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                TextInput::make('socialAccount.username')
-                    ->label('Social Account ID')
-                    ->numeric()
-                    ->disabled()
+                Select::make('social_account_id')
+                    ->label('Akun Sosial')
+                    ->relationship('socialAccount', 'username')
+                    ->searchable()
+                    ->required()
                     ->columnSpanFull(),
 
                 Textarea::make('caption')
@@ -72,6 +77,38 @@ class GeneratedContentResource extends Resource
             ->columns([
                 TextColumn::make('socialAccount.username')->label('Username')->searchable(),
                 ImageColumn::make('image_url')->label('Image')->height(100),
+                TextColumn::make('caption_parsed')
+                    ->label('Caption')
+                    ->getStateUsing(function ($record) {
+                        try {
+                            $data = json_decode($record->response, true, 512, JSON_THROW_ON_ERROR);
+                            return $data['caption'] ?? '-';
+                        } catch (\Throwable $e) {
+                            return '[Invalid JSON]';
+                        }
+                    })
+                    ->wrap()
+                    ->limit(100),
+
+                TextColumn::make('tags_parsed')
+                    ->label('Tags')
+                    ->getStateUsing(function ($record) {
+                        try {
+                            $data = json_decode($record->response, true, 512, JSON_THROW_ON_ERROR);
+                            return collect($data['tags'] ?? [])->map(fn($tag) => '#' . trim($tag))->implode(' ');
+                        } catch (\Throwable $e) {
+                            return '[Invalid]';
+                        }
+                    })
+                    ->wrap()
+                    ->color('primary'),
+
+                TextColumn::make('status')
+                    ->badge(),
+
+                TextColumn::make('created_at')
+                    ->since()
+                    ->sortable(),
                 TextColumn::make('status')->badge(),
                 TextColumn::make('created_at')->since()->sortable(),
             ])

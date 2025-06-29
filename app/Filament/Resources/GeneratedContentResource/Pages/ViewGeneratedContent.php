@@ -10,20 +10,11 @@ class ViewGeneratedContent extends ViewRecord
 {
     protected static string $resource = GeneratedContentResource::class;
 
-    protected function getHeaderWidgets(): array
+    // Arahkan ke custom view
+    protected static string $view = 'filament.resources.generated-content.pages.view-generated-content';
+
+    protected function getHeaderActions(): array
     {
         return [];
     }
-    
-    protected function mutateFormDataBeforeFill(array $data): array
-    {
-        $parsed = json_decode($data['response'], true);
-
-        return [
-            ...$data,
-            'caption' => $parsed['caption'] ?? '-',
-            'tags' => implode(', ', $parsed['tags'] ?? []),
-        ];
-    }
-
 }

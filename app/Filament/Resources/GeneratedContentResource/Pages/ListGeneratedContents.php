@@ -16,4 +16,15 @@ class ListGeneratedContents extends ListRecords
             Actions\CreateAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeFill(array $data): array
+    {
+        $parsed = json_decode($data['response'], true);
+
+        return [
+            ...$data,
+            'caption' => $parsed['caption'] ?? '-',
+            'tags' => implode(', ', $parsed['tags'] ?? []),
+        ];
+    }
 }
