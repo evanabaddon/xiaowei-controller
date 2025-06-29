@@ -70,9 +70,11 @@ class GenerateContentForAccountJob implements ShouldQueue
 
     protected function getOllamaResponse(string $prompt): array
     {
+        $endpoint = rtrim(env('OLLAMA_URL', 'https://ollama.h4ckmuka.online'), '/') . '/api/chat/';
+
         $response = Http::timeout(30)
-            ->withOptions(['verify' => false]) // jika pakai SSL self-signed
-            ->post(env('OLLAMA_URL', 'https://ollama.h4ckmuka.online/api/chat/'), [
+            ->withOptions(['verify' => false])
+            ->post($endpoint, [
                 'model' => env('OLLAMA_MODEL', 'llama3'),
                 'messages' => [
                     [
@@ -97,11 +99,16 @@ class GenerateContentForAccountJob implements ShouldQueue
                     'required' => ['caption', 'tags'],
                 ],
             ]);
+
     
         $result = $response->json();
+        if (!is_array($result)) {
+            Log::error('[Ollama] Invalid JSON format', ['body' => $response->body()]);
+            return [];
+        }
     
         Log::debug("🧠 [Ollama] Raw Response: ", $result);
-        Log::debug("🧠 [Ollama] message.content: {$result['message']['content']}");
+        return $result;
     
         return $result;
     }
