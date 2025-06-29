@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\SocialAccount;
 use Illuminate\Database\Eloquent\Model;
 
 class GeneratedContent extends Model

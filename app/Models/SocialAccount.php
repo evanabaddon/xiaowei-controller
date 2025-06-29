@@ -51,4 +51,6 @@ class SocialAccount extends Model
     {
         return $this->hasMany(GeneratedContent::class);
     }
+
+    
 }

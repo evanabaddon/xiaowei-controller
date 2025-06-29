@@ -85,10 +85,11 @@ class ContentTaskResource extends Resource
                         $account = $record->socialAccount;
                 
                         if ($account) {
-                            GenerateContentForAccountJob::dispatch($account);
+                            GenerateContentForAccountJob::dispatch($account->persona);
+
                 
                             Notification::make()
-                                ->title("Konten sedang digenerate untuk {$account->username}")
+                                ->title("Konten sedang digenerate")
                                 ->success()
                                 ->send();
                         } else {
