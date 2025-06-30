@@ -24,7 +24,7 @@ class PlatformResource extends Resource
 {
     protected static ?string $model = Platform::class;
 
-    // protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-globe-asia-australia';
 
     protected static ?string $navigationGroup = 'Account Management';
 

@@ -10,6 +10,7 @@ use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ListRecords;
 use App\Filament\Resources\SocialAccountResource;
 use Illuminate\Contracts\Database\Eloquent\Builder;
+use HayderHatem\FilamentExcelImport\Actions\Concerns\CanImportExcelRecords;
 
 class ListSocialAccounts extends ListRecords
 {
@@ -19,6 +20,8 @@ class ListSocialAccounts extends ListRecords
     {
         return [
             Actions\CreateAction::make(),
+            // Actions\ImportAction::make()
+            //     ->importer(UserImporter::class),
         ];
     }
 

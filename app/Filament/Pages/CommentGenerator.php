@@ -20,7 +20,10 @@ class CommentGenerator extends Page implements HasForms
     protected static string $view = 'filament.pages.comment-generator';
     public ?array $formData = [];
     public ?string $generatedComments = null;
-    protected static ?string $navigationGroup = 'Content Management [AI]';
+    protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-bottom-center-text';
+    
+    protected static ?string $navigationGroup = 'Content Management 🤖';
+
     protected static ?string $title = 'Comment Generator';
     public ?string $lastPrompt = null;
 

@@ -26,8 +26,9 @@ class ContentTaskResource extends Resource
 {
     protected static ?string $model = ContentTask::class;
 
-    // protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-    protected static ?string $navigationGroup = 'Content Management [AI]';
+    protected static ?string $navigationIcon = 'heroicon-o-calendar-date-range';
+
+    protected static ?string $navigationGroup = 'Content Management 🤖';
 
     protected static ?string $title = 'Content Scheduller';
 
@@ -89,8 +90,6 @@ class ContentTaskResource extends Resource
                 
                         if ($account) {
                             GenerateContentForAccountJob::dispatch($account->persona);
-
-                
                             Notification::make()
                                 ->title("Konten sedang digenerate")
                                 ->success()

@@ -22,16 +22,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Filament::serving(function () {
-            Filament::registerNavigationGroups([
-                NavigationGroup::make()
-                     ->label('Account Management')
-                     ->icon('heroicon-o-users')->collapsed(true),
-                NavigationGroup::make()
-                     ->label('Content Management [AI]')
-                     ->icon('heroicon-o-chat-bubble-left-right')->collapsed(true),
-            ]);
-        });
+        // Filament::serving(function () {
+        //     Filament::registerNavigationGroups([
+        //         NavigationGroup::make()
+        //              ->label('Account Management')
+        //              ->icon('heroicon-o-users')->collapsed(true),
+        //         NavigationGroup::make()
+        //              ->label('Content Management [AI]')
+        //              ->icon('heroicon-o-chat-bubble-left-right')->collapsed(true),
+        //     ]);
+        // });
 
         app()->terminating(function () {
             WebSocketPool::closeAll();

@@ -19,7 +19,7 @@ class AccountCategoryResource extends Resource
 {
     protected static ?string $model = AccountCategory::class;
 
-    // protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-rectangle-group';
 
     protected static ?string $navigationGroup = 'Account Management';
 

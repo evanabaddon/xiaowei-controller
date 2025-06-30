@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AccountPersona;
 use App\Models\GeneratedContent;
+use App\Services\GeminiAIService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Log;
 use App\Enum\AgeRange;
 use App\Enum\PoliticalLeaning;
 use App\Enum\ContentTone;
+use Exception;
 
 class GenerateContentForAccountJob implements ShouldQueue
 {
@@ -37,19 +39,17 @@ class GenerateContentForAccountJob implements ShouldQueue
         Log::info("🚀 [GenerateContent] Mulai proses untuk {$account->username}");
 
         $prompt = $this->generatePromptFromPersona($this->persona);
-        $ollamaResponse = $this->getOllamaResponse($prompt);
 
-        $json = json_decode($ollamaResponse['message']['content'], true);
+        $json = $this->getAiResponse($prompt);
 
         if (!$json || !is_array($json)) {
-            Log::error('[GenerateContent] Gagal parsing JSON dari Ollama', [
-                'raw_content' => $ollamaResponse['message']['content'] ?? '[null]',
+            Log::error('[GenerateContent] Gagal parsing JSON dari AI response', [
                 'persona_id' => $this->persona->id,
             ]);
             return;
         }
 
-        Log::debug("🧠 [Ollama] Parsed JSON: ", $json);
+        Log::debug("🧠 [AI] Parsed JSON: ", $json);
 
         $imageUrl = $this->getPexelsImage($this->persona);
         Log::debug("🖼️ [Pexels] Image URL: " . ($imageUrl ?? '[null]'));
@@ -68,9 +68,29 @@ class GenerateContentForAccountJob implements ShouldQueue
         Log::info("✅ [GenerateContent] Konten berhasil disimpan untuk {$account->username}");
     }
 
-    protected function getOllamaResponse(string $prompt): array
+    protected function getAiResponse(string $prompt): ?array
     {
-        $endpoint = rtrim(env('OLLAMA_URL', 'https://ollama.h4ckmuka.online'), '/') . '/api/chat/';
+        try {
+            $provider = env('AI_PROVIDER', 'ollama');
+
+            if ($provider === 'gemini') {
+                $gemini = new GeminiAIService();
+                $resultText = $gemini->generateGeminiResponse($prompt);
+                $json = json_decode($resultText, true, 512, JSON_THROW_ON_ERROR);
+                Log::debug('[Gemini] Parsed JSON:', $json);
+                return $json;
+            } else {
+                return $this->getOllamaResponse($prompt);
+            }
+        } catch (Exception $e) {
+            Log::error('[AI Error] Gagal memproses AI:', ['message' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    protected function getOllamaResponse(string $prompt): ?array
+    {
+        $endpoint = rtrim(env('OLLAMA_URL', 'http://localhost:11434'), '/') . '/api/chat/';
 
         $response = Http::timeout(30)
             ->withOptions(['verify' => false])
@@ -87,46 +107,24 @@ class GenerateContentForAccountJob implements ShouldQueue
                     ],
                 ],
                 'stream' => false,
-                'format' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'caption' => ['type' => 'string'],
-                        'tags' => [
-                            'type' => 'array',
-                            'items' => ['type' => 'string'],
-                        ],
-                    ],
-                    'required' => ['caption', 'tags'],
-                ],
             ]);
 
-    
         $result = $response->json();
-        if (!is_array($result)) {
-            Log::error('[Ollama] Invalid JSON format', ['body' => $response->body()]);
-            return [];
-        }
-    
-        Log::debug("🧠 [Ollama] Raw Response: ", $result);
-        return $result;
-    
-        return $result;
+        Log::debug('[Ollama] Raw Response: ', $result);
+
+        return json_decode($result['message']['content'] ?? '{}', true);
     }
 
     protected function getPexelsImage(AccountPersona $persona): ?string
     {
-        // Ambil interest list dari array atau string
         $interestList = is_array($persona->interests)
             ? $persona->interests
             : explode(',', trim($persona->interests, '" '));
 
-        // Bersihkan spasi dan quote
         $interestList = array_map(fn($i) => trim($i, "\" \t\n\r\0\x0B"), $interestList);
-        $interestList = array_filter($interestList); // Hapus yang kosong
+        $interestList = array_filter($interestList);
 
-        // Pilih interest secara acak
         $query = $interestList ? $interestList[array_rand($interestList)] : 'nature';
-
         Log::debug('[Pexels] Randomized Interest Query: ' . $query);
 
         $response = Http::withHeaders([
@@ -142,15 +140,12 @@ class GenerateContentForAccountJob implements ShouldQueue
 
         if ($response->successful()) {
             $photos = $response->json('photos');
-            if (!empty($photos) && isset($photos[0]['src']['large2x'])) {
-                return $photos[0]['src']['large2x'];
-            }
+            return $photos[0]['src']['large2x'] ?? null;
         }
 
         Log::warning('[Pexels] Gagal mengambil gambar untuk query: ' . $query);
         return null;
     }
-
 
     protected function generatePromptFromPersona(AccountPersona $persona, string $tema = 'umum'): string
     {
@@ -161,22 +156,21 @@ class GenerateContentForAccountJob implements ShouldQueue
         $desc = $persona->persona_description ?? '-';
 
         return <<<PROMPT
-    Buatkan caption sosial media yang menarik dan kekinian.
+Buatkan caption sosial media yang menarik dan kekinian.
 
-    - Gaya bahasa: $toneLabel
-    - Target usia: $ageLabel
-    - Arah politik: $politicLabel
-    - Minat utama: $interestStr
-    - Tema konten: $tema
+- Gaya bahasa: $toneLabel
+- Target usia: $ageLabel
+- Arah politik: $politicLabel
+- Minat utama: $interestStr
+- Tema konten: $tema
 
-    Gunakan gaya yang sesuai dengan deskripsi persona: "$desc"
+Gunakan gaya yang sesuai dengan deskripsi persona: "$desc"
 
-    Berikan hasil dalam format JSON seperti ini:
-    {
-    "caption": "...",
-    "tags": ["...", "..."]
+Berikan hasil dalam format JSON seperti ini:
+{
+  "caption": "...",
+  "tags": ["...", "..."]
+}
+PROMPT;
     }
-    PROMPT;
-    }
-
 }
