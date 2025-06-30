@@ -70,7 +70,7 @@ class GenerateContentForAccountJob implements ShouldQueue
 
     protected function getOllamaResponse(string $prompt): array
     {
-        $endpoint = config('services.ollama.url') . '/api/chat';
+        $endpoint = rtrim(config('services.ollama.url'), '/') . '/api/chat';
         $model = config('services.ollama.model', 'llama3');
     
         $payload = [
@@ -94,65 +94,73 @@ class GenerateContentForAccountJob implements ShouldQueue
             'payload' => $payload,
         ]);
     
-        try {
-            $response = Http::timeout(30)
-                ->withOptions(['verify' => false])
-                ->post($endpoint, $payload);
+        // Retry mechanism
+        $maxAttempts = 3;
+        $delaySeconds = 5;
     
-            if (!$response->successful()) {
-                Log::error('[Ollama] HTTP Request failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
-                ]);
-                return [];
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $response = Http::timeout(30)
+                    ->withOptions(['verify' => false])
+                    ->post($endpoint, $payload);
+    
+                if (!$response->successful()) {
+                    Log::error("[Ollama] Attempt {$attempt} failed", [
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+                    continue;
+                }
+    
+                $json = $response->json();
+    
+                // CASE A: Response langsung valid
+                if (isset($json['caption']) && isset($json['tags'])) {
+                    Log::debug('[Ollama] Direct JSON response detected', $json);
+                    return $json;
+                }
+    
+                // CASE B: message.content
+                $rawContent = data_get($json, 'message.content', $response->body());
+                $rawContent = preg_replace('/<\|.*?\|>/', '', $rawContent);
+                $jsonStart = strpos($rawContent, '{');
+                $jsonEnd = strrpos($rawContent, '}');
+    
+                if ($jsonStart === false || $jsonEnd === false || $jsonEnd < $jsonStart) {
+                    Log::error('[Ollama] Tidak dapat menemukan JSON dalam response', ['raw' => $rawContent]);
+                    continue;
+                }
+    
+                $jsonContent = substr($rawContent, $jsonStart, $jsonEnd - $jsonStart + 1);
+                $parsed = json_decode($jsonContent, true);
+    
+                if (json_last_error() !== JSON_ERROR_NONE || !is_array($parsed)) {
+                    Log::error('[Ollama] Failed to decode JSON content', [
+                        'error' => json_last_error_msg(),
+                        'raw' => $rawContent,
+                    ]);
+                    continue;
+                }
+    
+                Log::debug('[Ollama] Final parsed result', $parsed);
+                return $parsed;
+    
+            } catch (\Throwable $e) {
+                Log::warning("[Ollama] Attempt {$attempt} exception: " . $e->getMessage());
+    
+                if ($attempt < $maxAttempts) {
+                    sleep($delaySeconds); // Delay antar retry
+                } else {
+                    Log::error('[Ollama] Gagal setelah beberapa percobaan.', [
+                        'exception' => $e->getMessage(),
+                    ]);
+                }
             }
-    
-            $json = $response->json();
-    
-            // CASE A: Response langsung valid
-            if (isset($json['caption']) && isset($json['tags'])) {
-                Log::debug('[Ollama] Direct JSON response detected', $json);
-                return $json;
-            }
-    
-            // CASE B: Response pakai message.content
-            $rawContent = data_get($json, 'message.content', $response->body());
-    
-            // Cleanup karakter aneh
-            $rawContent = preg_replace('/<\|.*?\|>/', '', $rawContent);
-    
-            // Ambil isi JSON dari string
-            $jsonStart = strpos($rawContent, '{');
-            $jsonEnd = strrpos($rawContent, '}');
-    
-            if ($jsonStart === false || $jsonEnd === false || $jsonEnd < $jsonStart) {
-                Log::error('[Ollama] Tidak dapat menemukan JSON dalam response', ['raw' => $rawContent]);
-                return [];
-            }
-    
-            $jsonContent = substr($rawContent, $jsonStart, $jsonEnd - $jsonStart + 1);
-            $parsed = json_decode($jsonContent, true);
-    
-            if (json_last_error() !== JSON_ERROR_NONE || !is_array($parsed)) {
-                Log::error('[Ollama] Failed to decode JSON content', [
-                    'error' => json_last_error_msg(),
-                    'raw' => $rawContent,
-                ]);
-                return [];
-            }
-    
-            Log::debug('[Ollama] Final parsed result', $parsed);
-            return $parsed;
-    
-        } catch (\Exception $e) {
-            Log::error('[Ollama] Exception saat request', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return [];
         }
-    }
     
+        return [];
+    }
+     
 
 
     protected function getPexelsImage(AccountPersona $persona): ?string
