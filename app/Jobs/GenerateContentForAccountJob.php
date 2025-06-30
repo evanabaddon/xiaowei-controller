@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\AccountPersona;
 use App\Models\GeneratedContent;
-use App\Services\GeminiAIService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -15,7 +14,6 @@ use Illuminate\Support\Facades\Log;
 use App\Enum\AgeRange;
 use App\Enum\PoliticalLeaning;
 use App\Enum\ContentTone;
-use Exception;
 
 class GenerateContentForAccountJob implements ShouldQueue
 {
@@ -26,11 +24,13 @@ class GenerateContentForAccountJob implements ShouldQueue
     public function __construct(AccountPersona $persona)
     {
         $this->persona = $persona;
+
     }
 
     public function handle(): void
     {
         $account = $this->persona->socialAccount;
+
         if (!$account) {
             Log::warning('[GenerateContent] Persona tidak memiliki akun sosial.');
             return;
@@ -39,17 +39,17 @@ class GenerateContentForAccountJob implements ShouldQueue
         Log::info("🚀 [GenerateContent] Mulai proses untuk {$account->username}");
 
         $prompt = $this->generatePromptFromPersona($this->persona);
+        $json = $this->getOllamaResponse($prompt); // ✅ Dideklarasikan di sini
 
-        $json = $this->getAiResponse($prompt);
-
-        if (!$json || !is_array($json)) {
-            Log::error('[GenerateContent] Gagal parsing JSON dari AI response', [
+        if (!$json || !is_array($json) || !isset($json['caption'], $json['tags'])) {
+            Log::error('[GenerateContent] Gagal parsing JSON dari Ollama', [
+                'raw_content' => $json,
                 'persona_id' => $this->persona->id,
             ]);
             return;
         }
 
-        Log::debug("🧠 [AI] Parsed JSON: ", $json);
+        Log::debug("🧠 [Ollama] Parsed JSON: ", $json);
 
         $imageUrl = $this->getPexelsImage($this->persona);
         Log::debug("🖼️ [Pexels] Image URL: " . ($imageUrl ?? '[null]'));
@@ -68,63 +68,107 @@ class GenerateContentForAccountJob implements ShouldQueue
         Log::info("✅ [GenerateContent] Konten berhasil disimpan untuk {$account->username}");
     }
 
-    protected function getAiResponse(string $prompt): ?array
+    protected function getOllamaResponse(string $prompt): array
     {
+        $endpoint = config('services.ollama.url') . '/api/chat';
+        $model = config('services.ollama.model', 'llama3');
+    
+        $payload = [
+            'model' => $model,
+            'stream' => false,
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => 'Kamu adalah AI pembuat caption sosial media. Jawabanmu HARUS berupa JSON seperti {"caption": "...", "tags": ["...", "..."]}, dan tidak boleh menambahkan teks di luar struktur tersebut.',
+                ],
+                [
+                    'role' => 'user',
+                    'content' => $prompt,
+                ],
+            ],
+        ];
+    
+        Log::info('[Ollama] Sending request', [
+            'url' => $endpoint,
+            'model' => $model,
+            'payload' => $payload,
+        ]);
+    
         try {
-            $provider = env('AI_PROVIDER', 'ollama');
-
-            if ($provider === 'gemini') {
-                $gemini = new GeminiAIService();
-                $resultText = $gemini->generateGeminiResponse($prompt);
-                $json = json_decode($resultText, true, 512, JSON_THROW_ON_ERROR);
-                Log::debug('[Gemini] Parsed JSON:', $json);
-                return $json;
-            } else {
-                return $this->getOllamaResponse($prompt);
+            $response = Http::timeout(30)
+                ->withOptions(['verify' => false])
+                ->post($endpoint, $payload);
+    
+            if (!$response->successful()) {
+                Log::error('[Ollama] HTTP Request failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+                return [];
             }
-        } catch (Exception $e) {
-            Log::error('[AI Error] Gagal memproses AI:', ['message' => $e->getMessage()]);
-            return null;
+    
+            $json = $response->json();
+    
+            // CASE A: Response langsung valid
+            if (isset($json['caption']) && isset($json['tags'])) {
+                Log::debug('[Ollama] Direct JSON response detected', $json);
+                return $json;
+            }
+    
+            // CASE B: Response pakai message.content
+            $rawContent = data_get($json, 'message.content', $response->body());
+    
+            // Cleanup karakter aneh
+            $rawContent = preg_replace('/<\|.*?\|>/', '', $rawContent);
+    
+            // Ambil isi JSON dari string
+            $jsonStart = strpos($rawContent, '{');
+            $jsonEnd = strrpos($rawContent, '}');
+    
+            if ($jsonStart === false || $jsonEnd === false || $jsonEnd < $jsonStart) {
+                Log::error('[Ollama] Tidak dapat menemukan JSON dalam response', ['raw' => $rawContent]);
+                return [];
+            }
+    
+            $jsonContent = substr($rawContent, $jsonStart, $jsonEnd - $jsonStart + 1);
+            $parsed = json_decode($jsonContent, true);
+    
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($parsed)) {
+                Log::error('[Ollama] Failed to decode JSON content', [
+                    'error' => json_last_error_msg(),
+                    'raw' => $rawContent,
+                ]);
+                return [];
+            }
+    
+            Log::debug('[Ollama] Final parsed result', $parsed);
+            return $parsed;
+    
+        } catch (\Exception $e) {
+            Log::error('[Ollama] Exception saat request', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return [];
         }
     }
+    
 
-    protected function getOllamaResponse(string $prompt): ?array
-    {
-        $endpoint = rtrim(env('OLLAMA_URL', 'http://localhost:11434'), '/') . '/api/chat/';
-
-        $response = Http::timeout(30)
-            ->withOptions(['verify' => false])
-            ->post($endpoint, [
-                'model' => env('OLLAMA_MODEL', 'llama3'),
-                'messages' => [
-                    [
-                        'role' => 'system',
-                        'content' => 'Kamu adalah AI pembuat caption sosial media. Jawabanmu HARUS berupa JSON seperti {"caption": "...", "tags": ["...", "..."]}, dan tidak boleh menambahkan teks di luar struktur tersebut.',
-                    ],
-                    [
-                        'role' => 'user',
-                        'content' => $prompt,
-                    ],
-                ],
-                'stream' => false,
-            ]);
-
-        $result = $response->json();
-        Log::debug('[Ollama] Raw Response: ', $result);
-
-        return json_decode($result['message']['content'] ?? '{}', true);
-    }
 
     protected function getPexelsImage(AccountPersona $persona): ?string
     {
+        // Ambil interest list dari array atau string
         $interestList = is_array($persona->interests)
             ? $persona->interests
             : explode(',', trim($persona->interests, '" '));
 
+        // Bersihkan spasi dan quote
         $interestList = array_map(fn($i) => trim($i, "\" \t\n\r\0\x0B"), $interestList);
-        $interestList = array_filter($interestList);
+        $interestList = array_filter($interestList); // Hapus yang kosong
 
+        // Pilih interest secara acak
         $query = $interestList ? $interestList[array_rand($interestList)] : 'nature';
+
         Log::debug('[Pexels] Randomized Interest Query: ' . $query);
 
         $response = Http::withHeaders([
@@ -140,12 +184,15 @@ class GenerateContentForAccountJob implements ShouldQueue
 
         if ($response->successful()) {
             $photos = $response->json('photos');
-            return $photos[0]['src']['large2x'] ?? null;
+            if (!empty($photos) && isset($photos[0]['src']['large2x'])) {
+                return $photos[0]['src']['large2x'];
+            }
         }
 
         Log::warning('[Pexels] Gagal mengambil gambar untuk query: ' . $query);
         return null;
     }
+
 
     protected function generatePromptFromPersona(AccountPersona $persona, string $tema = 'umum'): string
     {
@@ -156,21 +203,22 @@ class GenerateContentForAccountJob implements ShouldQueue
         $desc = $persona->persona_description ?? '-';
 
         return <<<PROMPT
-Buatkan caption sosial media yang menarik dan kekinian.
+    Buatkan caption sosial media yang menarik dan kekinian.
 
-- Gaya bahasa: $toneLabel
-- Target usia: $ageLabel
-- Arah politik: $politicLabel
-- Minat utama: $interestStr
-- Tema konten: $tema
+    - Gaya bahasa: $toneLabel
+    - Target usia: $ageLabel
+    - Arah politik: $politicLabel
+    - Minat utama: $interestStr
+    - Tema konten: $tema
 
-Gunakan gaya yang sesuai dengan deskripsi persona: "$desc"
+    Gunakan gaya yang sesuai dengan deskripsi persona: "$desc"
 
-Berikan hasil dalam format JSON seperti ini:
-{
-  "caption": "...",
-  "tags": ["...", "..."]
-}
-PROMPT;
+    Berikan hasil dalam format JSON seperti ini:
+    {
+    "caption": "...",
+    "tags": ["...", "..."]
     }
+    PROMPT;
+    }
+
 }

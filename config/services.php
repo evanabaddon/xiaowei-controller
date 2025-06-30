@@ -39,4 +39,9 @@ return [
         'project_id' => env('GEMINI_API_KEY'),
     ],
 
+    'ollama' => [
+        'url' => env('OLLAMA_URL'),
+        'model' => env('OLLAMA_MODEL', 'llama3'),
+    ],
+
 ];
