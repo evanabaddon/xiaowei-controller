@@ -45,6 +45,7 @@ class DeviceResource extends Resource
             ->columns([
                 TextColumn::make('machine.name')->label('Machine')->searchable(),
                 TextColumn::make('serial')->searchable(),
+                TextColumn::make('android_id')->searchable(),
                 TextColumn::make('name')
                     ->label('Name')
                     ->formatStateUsing(fn ($state, $record) => "{$record->id}-{$record->model}-{$record->machine->name}")
@@ -58,17 +59,17 @@ class DeviceResource extends Resource
                     default => 'gray'
                 }),
 
-                TextColumn::make('connection_status')
-                    ->label('Internet (Cache)')
-                    ->getStateUsing(fn($record) => cache("ping_status_{$record->serial}"))
-                    ->badge()
-                    ->color(fn ($state) => match ($state) {
-                        'Connected' => 'success',
-                        'No Internet' => 'warning',
-                        'Disconnected' => 'danger',
-                        'Error' => 'gray',
-                        default => 'gray',
-                    }),
+                // TextColumn::make('connection_status')
+                //     ->label('Internet (Cache)')
+                //     ->getStateUsing(fn($record) => cache("ping_status_{$record->serial}"))
+                //     ->badge()
+                //     ->color(fn ($state) => match ($state) {
+                //         'Connected' => 'success',
+                //         'No Internet' => 'warning',
+                //         'Disconnected' => 'danger',
+                //         'Error' => 'gray',
+                //         default => 'gray',
+                //     }),
 
                 TextColumn::make('ip_address')->sortable()->label('IP'),
                 TextColumn::make('ssid')->label('SSID')->color('gray'),

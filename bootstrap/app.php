@@ -17,7 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->validateCsrfTokens(except: [
+            'stripe/*',
+            'register-device',
+            'device/*',
+        ]);
     })
     ->withSchedule(function (Schedule $schedule): void {
         $schedule->job(PingMachineStatusJob::class)->everyMinute();

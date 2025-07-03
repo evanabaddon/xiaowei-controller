@@ -17,12 +17,25 @@ class Device extends Model
         'last_seen_at',
         'ip_address',
         'ssid',
+        'android_id', 
+        'adb_serial',   
     ];
 
     public function machine()
     {
         return $this->belongsTo(Machine::class);
     }
+
+    public function automationTasks()
+    {
+        return $this->hasMany(\App\Models\AutomationTask::class);
+    }
+
+    public function latestAutomationTask()
+    {
+        return $this->hasOne(\App\Models\AutomationTask::class)->latestOfMany();
+    }
+
 
     public function getInstalledApps(): array
     {
