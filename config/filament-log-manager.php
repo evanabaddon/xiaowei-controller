@@ -44,6 +44,6 @@ return [
     /**
      * Navigation sort order.
      */
-    'navigation_sort' => 9999,
+    'navigation_sort' => 9999999999999,
 
 ];

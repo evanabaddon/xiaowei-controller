@@ -2,70 +2,98 @@
 
 namespace App\Jobs;
 
-use App\Models\AccountPersona;
-use App\Models\GeneratedContent;
+use App\Enum\AgeRange;
+use App\Enum\ContentTone;
+use App\Models\SocialAccount;
 use Illuminate\Bus\Queueable;
+use App\Enum\PoliticalLeaning;
+use App\Models\AccountPersona;
+use App\Models\AutomationTask;
+use App\Models\GeneratedContent;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use App\Enum\AgeRange;
-use App\Enum\PoliticalLeaning;
-use App\Enum\ContentTone;
 
 class GenerateContentForAccountJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected AccountPersona $persona;
+    protected array $social_account_ids;
+    protected ?AutomationTask $automationTask;
+    
 
-    public function __construct(AccountPersona $persona)
+    public function __construct(AccountPersona $persona, array $social_account_ids, ?AutomationTask $automationTask = null)
     {
+        Log::info('[DEBUG] Constructor job', [
+            'persona_id' => $persona->id ?? null,
+            'social_account_ids' => $social_account_ids,
+            'automation_task_id' => $automationTask?->id,
+        ]);
         $this->persona = $persona;
-
+        $this->social_account_ids = $social_account_ids;
+        $this->automationTask = $automationTask;
     }
+
 
     public function handle(): void
     {
-        $account = $this->persona->socialAccount;
+        Log::info('[DEBUG] GenerateContentForAccountJob dijalankan', [
+            'persona_id' => $this->persona->id ?? null,
+            'social_account_ids' => $this->social_account_ids ?? null,
+        ]);
+        $accountIds = $this->social_account_ids ?? [];
 
-        if (!$account) {
-            Log::warning('[GenerateContent] Persona tidak memiliki akun sosial.');
-            return;
+        if (in_array('all', $accountIds)) {
+            $automationTask = $this->automationTask;
+            $accountIds = SocialAccount::where('platform_id', $automationTask->platform_id)
+                ->pluck('id')
+                ->toArray();
         }
 
-        Log::info("🚀 [GenerateContent] Mulai proses untuk {$account->username}");
+        foreach ($accountIds as $accountId) {
+            $account = SocialAccount::find($accountId);
 
-        $prompt = $this->generatePromptFromPersona($this->persona);
-        $json = $this->getOllamaResponse($prompt); // ✅ Dideklarasikan di sini
+            if (!$account) {
+                Log::warning("[GenerateContent] Akun sosial dengan ID $accountId tidak ditemukan.");
+                continue;
+            }
 
-        if (!$json || !is_array($json) || !isset($json['caption'], $json['tags'])) {
-            Log::error('[GenerateContent] Gagal parsing JSON dari Ollama', [
-                'raw_content' => $json,
-                'persona_id' => $this->persona->id,
-            ]);
-            return;
+            Log::info("🚀 [GenerateContent] Mulai proses untuk {$account->username}");
+
+            $prompt = $this->generatePromptFromPersona($this->persona, $account);
+            $json = $this->getOllamaResponse($prompt);
+
+            if (!$json || !is_array($json) || !isset($json['caption'], $json['tags'])) {
+                Log::error('[GenerateContent] Gagal parsing JSON dari Ollama', [
+                    'raw_content' => $json,
+                    'persona_id' => $this->persona->id,
+                    'account_id' => $accountId,
+                ]);
+                continue;
+            }
+
+            Log::debug("🧠 [Ollama] Parsed JSON: ", $json);
+
+            $imageUrl = $this->getPexelsImage($this->persona);
+            Log::debug("🖼️ [Pexels] Image URL: " . ($imageUrl ?? '[null]'));
+
+            $data = [
+                'social_account_id' => $account->id,
+                'prompt' => $prompt,
+                'response' => json_encode($json),
+                'image_url' => $imageUrl,
+                'status' => 'draft',
+            ];
+
+            Log::info("💾 [GeneratedContent] Data to be saved: ", $data);
+            GeneratedContent::create($data);
+
+            Log::info("✅ [GenerateContent] Konten berhasil disimpan untuk {$account->username}");
         }
-
-        Log::debug("🧠 [Ollama] Parsed JSON: ", $json);
-
-        $imageUrl = $this->getPexelsImage($this->persona);
-        Log::debug("🖼️ [Pexels] Image URL: " . ($imageUrl ?? '[null]'));
-
-        $data = [
-            'social_account_id' => $account->id,
-            'prompt' => $prompt,
-            'response' => json_encode($json),
-            'image_url' => $imageUrl,
-            'status' => 'draft',
-        ];
-
-        Log::info("💾 [GeneratedContent] Data to be saved: ", $data);
-        GeneratedContent::create($data);
-
-        Log::info("✅ [GenerateContent] Konten berhasil disimpan untuk {$account->username}");
     }
 
     protected function getOllamaResponse(string $prompt): array

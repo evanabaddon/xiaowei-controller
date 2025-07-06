@@ -65,11 +65,9 @@ class SocialAccountResource extends Resource
                 Select::make('device_id')
                     ->label('Dipakai di Device')
                     ->options(
-                        Device::all()->mapWithKeys(function ($device) {
-                            return [
-                                $device->id => "{$device->id}-{$device->model}-{$device->machine->name}",
-                            ];
-                        })
+                        fn () => \App\Models\Device::all()->mapWithKeys(fn ($device) => [
+                            $device->id => "{$device->android_id} - {$device->model} - {$device->machine?->name}"
+                        ])
                     )
                     ->searchable(),
 

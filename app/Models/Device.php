@@ -26,6 +26,11 @@ class Device extends Model
         return $this->belongsTo(Machine::class);
     }
 
+    public function socialAccounts()
+    {
+        return $this->hasMany(\App\Models\SocialAccount::class, 'device_id');
+    }
+
     public function automationTasks()
     {
         return $this->hasMany(\App\Models\AutomationTask::class);

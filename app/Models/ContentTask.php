@@ -10,7 +10,7 @@ class ContentTask extends Model
     use HasFactory;
 
     protected $fillable = [
-        'social_account_id',
+        'social_account_ids',
         'mode',
         'daily_quota',
         'active',
@@ -18,14 +18,21 @@ class ContentTask extends Model
         'response',
         'image_url',
         'status',
+        'automation_task_id',
     ];
 
     protected $casts = [
         'active' => 'boolean',
+        'social_account_ids' => 'array',
     ];
 
     public function socialAccount()
     {
         return $this->belongsTo(SocialAccount::class);
+    }
+
+    public function automationTask()
+    {
+        return $this->belongsTo(AutomationTask::class);
     }
 }

@@ -2,23 +2,33 @@
 
 namespace App\Providers\Filament;
 
-use Filament\Http\Middleware\Authenticate;
-use Filament\Http\Middleware\AuthenticateSession;
-use Filament\Http\Middleware\DisableBladeIconComponents;
-use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Navigation\NavigationBuilder;
-use Filament\Navigation\NavigationGroup;
+use App\Filament\Pages\CommentGenerator;
 use Filament\Pages;
 use Filament\Panel;
-use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
 use Filament\Widgets;
-use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
-use Illuminate\Cookie\Middleware\EncryptCookies;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
-use Illuminate\Routing\Middleware\SubstituteBindings;
+use Filament\PanelProvider;
+use Filament\Pages\Dashboard;
+use App\Models\AccountCategory;
+use Filament\Support\Colors\Color;
+use Filament\Navigation\NavigationItem;
+use Filament\Navigation\NavigationGroup;
+use Filament\Http\Middleware\Authenticate;
+use Filament\Navigation\NavigationBuilder;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Filament\Http\Middleware\AuthenticateSession;
+use App\Filament\Resources\AccountCategoryResource;
+use App\Filament\Resources\AutomationTaskResource;
+use App\Filament\Resources\ContentTaskResource;
+use App\Filament\Resources\GeneratedContentResource;
+use App\Filament\Resources\PlatformResource;
+use App\Filament\Resources\SocialAccountResource;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Filament\Http\Middleware\DisableBladeIconComponents;
+use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -35,6 +45,7 @@ class AdminPanelProvider extends PanelProvider
             ->navigationGroups([
                 'Account Management',
                 'Content Management 🤖',
+                'Automation Tools',
                 'System',
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
