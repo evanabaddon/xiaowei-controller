@@ -23,7 +23,7 @@ class GeneratedContentResource extends Resource
 {
     protected static ?string $model = GeneratedContent::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-photo';
+    protected static ?string $navigationIcon = 'heroicon-o-newspaper';
 
     protected static ?string $navigationGroup = 'Content Management 🤖';
 

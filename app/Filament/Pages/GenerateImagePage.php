@@ -4,7 +4,14 @@ namespace App\Filament\Pages;
 use Filament\Pages\Page;
 use Filament\Forms;
 use App\Services\ComfyUIService;
+use Illuminate\Support\Facades\Log;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Actions;
+use Filament\Forms\Components\Section;
 use Filament\Notifications\Notification;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Actions\Action;
+
 
 class GenerateImagePage extends Page implements Forms\Contracts\HasForms
 {
@@ -13,21 +20,41 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
     public $prompt;
     public $imageUrl;
     public $isLoading = false;
+    public $seed;
 
     protected static string $view = 'filament.pages.generate-image-page';
+
+    protected static ?string $navigationIcon = 'heroicon-o-photo';
+
+    protected static ?string $title = 'Image Generator';
+    
+    protected static ?string $navigationGroup = 'Content Management 🤖';
 
     protected function getFormSchema(): array
     {
         return [
-            Forms\Components\TextInput::make('prompt')
-                ->label('Prompt')
-                ->required(),
-            Forms\Components\Actions::make([
-                Forms\Components\Actions\Action::make('Generate')
-                    ->action('generateImage')
-                    ->label('Generate Image')
-                    ->disabled(fn () => $this->isLoading),
-            ]),
+            Section::make('Generate Image')
+                ->description('Masukkan prompt dan seed untuk menghasilkan gambar.')
+                ->schema([
+                    Grid::make(2)->schema([
+                        TextInput::make('prompt')
+                            ->label('Prompt')
+                            ->required(),
+
+                        TextInput::make('seed')
+                            ->label('Custom Seed (kosongkan untuk random)')
+                            ->numeric()
+                            ->placeholder('Optional'),
+                    ]),
+
+                    Actions::make([
+                        Action::make('Generate')
+                            ->action('generateImage')
+                            ->label('Generate Image')
+                            ->disabled(fn () => $this->isLoading),
+                    ])->alignRight(),
+                ])
+                ->columns(1), // agar section tidak pecah dua kolom
         ];
     }
 
@@ -37,14 +64,18 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
 
         try {
             $comfy = new ComfyUIService();
-            $response = $comfy->generateImage($this->prompt);
+
+            Log::info('[Form Input] Prompt: ' . $this->prompt);
+            Log::info('[Form Input] Seed: ' . $this->seed);
+
+            $usedSeed = $this->seed ?: random_int(1, 999999999999);
+
+            $response = $comfy->generateImage($this->prompt, $usedSeed);
             $promptId = $response['prompt_id'] ?? null;
 
             if ($promptId) {
-                // Delay polling (idealnya gunakan queue/poll async)
                 sleep(4);
-                $result = $comfy->getImageByPromptId($promptId);
-                $this->imageUrl = $result['outputs'][0]['images'][0]['url'] ?? null;
+                $this->imageUrl = $comfy->getImageByPromptId($promptId);
             }
 
         } catch (\Throwable $e) {

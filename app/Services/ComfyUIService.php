@@ -9,10 +9,11 @@ class ComfyUIService
 {
     protected string $baseUrl = 'https://cui.h4ckmuka.online';
 
-    public function generateImage(string $prompt): array
+    public function generateImage(string $prompt,int $seed): array
     {
         $json = json_decode(file_get_contents(base_path('comfy/BaseRealVis.json')), true);
         $json["6"]["inputs"]["text"] = $prompt;
+        $json["3"]["inputs"]["seed"] = $seed; 
 
         $response = Http::withoutVerifying()->post('https://cui.h4ckmuka.online/prompt', [
             'prompt' => $json
@@ -39,7 +40,16 @@ class ComfyUIService
         $data = $response->json();
         Log::info('[ComfyUI] History response: ', $data);
     
-        $image = $data['outputs'][0]['images'][0] ?? null;
+        $payload = $data[$promptId] ?? null;
+    
+        if (!$payload) {
+            Log::warning('[ComfyUI] No payload found for prompt ID.');
+            return null;
+        }
+    
+        $outputs = $payload['outputs'] ?? [];
+        $firstOutput = reset($outputs);
+        $image = $firstOutput['images'][0] ?? null;
     
         if (!$image || empty($image['filename'])) {
             Log::warning('[ComfyUI] No image found in response.');
