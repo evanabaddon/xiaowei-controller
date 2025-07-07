@@ -60,6 +60,15 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
 
     public function generateImage()
     {
+        if (empty($this->prompt)) {
+            Notification::make()
+                ->title('Prompt Kosong')
+                ->body('Silakan isi prompt terlebih dahulu sebelum generate.')
+                ->danger()
+                ->send();
+            return;
+        }
+        
         $this->isLoading = true;
 
         try {
