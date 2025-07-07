@@ -19,20 +19,27 @@ class ContentTask extends Model
         'image_url',
         'status',
         'automation_task_id',
+        'last_generated_at',
     ];
 
     protected $casts = [
+        'last_generated_at' => 'datetime',
         'active' => 'boolean',
         'social_account_ids' => 'array',
     ];
 
-    public function socialAccount()
+    public function socialAccounts()
     {
-        return $this->belongsTo(SocialAccount::class);
+        return SocialAccount::whereIn('id', $this->social_account_ids ?? [])->get();
     }
 
     public function automationTask()
     {
         return $this->belongsTo(AutomationTask::class);
+    }
+
+    public function generatedContents()
+    {
+        return $this->hasMany(GeneratedContent::class);
     }
 }

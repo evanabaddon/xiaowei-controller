@@ -36,26 +36,64 @@ return Application::configure(basePath: dirname(__DIR__))
             Log::info("🧩 Jumlah task ditemukan: " . $tasks->count());
         
             $tasks->each(function ($task) {
-                if (!$task->socialAccount) {
-                    Log::warning("⚠️ Task ID {$task->id} tidak punya relasi socialAccount");
-                    return;
-                }
-        
-                Log::info("🎯 Memproses task ID {$task->id} untuk akun: " . $task->socialAccount->username);
-        
-                for ($i = 0; $i < $task->daily_quota; $i++) {
-                    if ($task->socialAccount && $task->socialAccount->persona) {
-                        GenerateContentForAccountJob::dispatch($task->socialAccount->persona);
-                    } else {
-                        Log::warning("[Scheduler] SocialAccount atau Persona tidak ditemukan untuk task ID {$task->id}");
+                $accountIds = $task->social_account_ids ?? [];
+            
+                Log::info("🔎 Task ID {$task->id} memiliki account_ids: " . json_encode($accountIds));
+            
+                $accounts = \App\Models\SocialAccount::whereIn('id', $accountIds)->get();
+            
+                foreach ($accounts as $account) {
+                    if (!$account || !$account->persona) {
+                        Log::warning("⚠️ Task ID {$task->id}: akun atau persona tidak valid.");
+                        continue;
                     }
-                    
-                    Log::info("🚀 Dispatch job ke queue untuk: " . $task->socialAccount->username);
+            
+                    Log::info("🎯 Dispatching job for persona {$account->persona->id} and account {$account->username}");
+            
+                    for ($i = 0; $i < $task->daily_quota; $i++) {
+                        \App\Jobs\GenerateContentForAccountJob::dispatch(
+                            $account->persona,
+                            [$account->id],
+                            $task->automationTask ?? null
+                        );
+                    }
                 }
             });
+            
+            
+            
         })
-        // ->everyMinute(); // Ubah ke dailyAt('00:15') kalau sudah yakin
-        ->dailyAt('00:15');
+        ->everyMinute(); 
+        // ->dailyAt('00:15');
+        $schedule->call(function () {
+            $tasks = \App\Models\AutomationTask::where('mode', 'otomatis')->get();
+        
+            foreach ($tasks as $task) {
+                if ($task->last_dispatched_at && $task->last_dispatched_at->isToday()) {
+                    Log::info("⏭ AutomationTask ID {$task->id} sudah dijalankan hari ini. Skip.");
+                    continue;
+                }
+        
+                $devices = $task->apply_to_all
+                    ? \App\Models\Device::all()
+                    : collect([$task->device]);
+        
+                foreach ($devices as $device) {
+                    if (empty($device->android_id)) {
+                        Log::warning("⚠️ Device ID {$device->id} tidak memiliki android_id. Lewatkan dispatch.");
+                        continue;
+                    }
+                
+                    \App\Jobs\DispatchAutomationToDevice::dispatch($task, $device);
+                    Log::info("✅ Dispatch automation ke device {$device->android_id} dari task {$task->id}");
+                }
+        
+                // Tandai sudah dikirim hari ini
+                $task->update(['last_dispatched_at' => now()]);
+            }
+        })->everyMinute();
+        // ->dailyAt('00:30');
+        
         
         
         

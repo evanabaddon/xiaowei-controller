@@ -16,6 +16,7 @@ use Filament\Forms\Components\Group;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Fieldset;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Textarea;
 use App\Jobs\DispatchAutomationToDevice;
@@ -178,17 +179,18 @@ class AutomationTaskResource extends Resource
                                 ->nullable(),
 
                             // TAP
-                            TextInput::make('x')
-                                ->label('X')
-                                ->numeric()
-                                ->nullable()
-                                ->visible(fn ($get) => $get('action') === 'tap'),
+                            Fieldset::make('Input Position')
+                                ->schema([
+                                    TextInput::make('x')
+                                    ->label('X')
+                                    ->numeric()
+                                    ->nullable(),
 
-                            TextInput::make('y')
-                                ->label('Y')
-                                ->numeric()
-                                ->nullable()
-                                ->visible(fn ($get) => $get('action') === 'tap'),
+                                    TextInput::make('y')
+                                        ->label('Y')
+                                        ->numeric()
+                                        ->nullable(),
+                                ])->visible(fn ($get) => $get('action') === 'tap'),
 
                             // SWIPE
                             TextInput::make('x1')

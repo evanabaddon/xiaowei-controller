@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Enum\AgeRange;
 use App\Enum\ContentTone;
+use App\Models\ContentTask;
 use App\Models\SocialAccount;
 use Illuminate\Bus\Queueable;
 use App\Enum\PoliticalLeaning;
@@ -93,6 +94,11 @@ class GenerateContentForAccountJob implements ShouldQueue
             GeneratedContent::create($data);
 
             Log::info("✅ [GenerateContent] Konten berhasil disimpan untuk {$account->username}");
+            // 🔄 Update last_generated_at di task yang relevan
+            ContentTask::whereJsonContains('social_account_ids', $account->id)
+            ->where('mode', 'scheduled')
+            ->where('active', 1)
+            ->update(['last_generated_at' => now()]);
         }
     }
 

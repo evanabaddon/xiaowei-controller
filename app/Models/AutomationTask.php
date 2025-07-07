@@ -6,11 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class AutomationTask extends Model
 {
-    protected $fillable = ['name','device_id', 'apply_to_all', 'mode', 'steps',  'platform_id', ];
+    protected $fillable = ['name','device_id', 'apply_to_all', 'mode', 'steps',  'platform_id', 'last_dispatched_at',];
 
     protected $casts = [
-        'steps' => 'array',
         'apply_to_all' => 'boolean',
+        'steps' => 'array',
+        'last_dispatched_at' => 'datetime',
     ];
 
     public function device()

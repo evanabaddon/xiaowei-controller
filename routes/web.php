@@ -121,51 +121,151 @@ Route::get('/device/{androidId}/task-done', function ($androidId) {
 //     ]);
 // });
 
+// Route::get('/device/{androidId}', function ($androidId) {
+//     $taskId = Cache::get("trigger_for_{$androidId}");
+//     if (!$taskId) {
+//         return response()->noContent();
+//     }
+
+//     $task = AutomationTask::find($taskId);
+//     $device = Device::where('android_id', $androidId)->first();
+//     if (!$device) {
+//         return response()->json(['error' => 'Device not found'], 404);
+//     }
+
+//     // Ambil queue akun sosial dari cache
+//     $queueKey = "queue_for_{$androidId}";
+//     $queue = Cache::get($queueKey, []);
+
+//     // Jika queue kosong, hapus trigger dan return kosong
+//     if (empty($queue)) {
+//         Cache::forget("trigger_for_{$androidId}");
+//         return response()->noContent();
+//     }
+
+//     // Pop satu akun dari queue
+//     $socialAccountId = array_shift($queue);
+//     Cache::put($queueKey, $queue, now()->addMinutes(10));
+
+//     $socialAccount = \App\Models\SocialAccount::find($socialAccountId);
+//     $generatedContent = \App\Models\GeneratedContent::where('social_account_id', $socialAccountId)
+//         ->where('status', 'draft')
+//         ->latest()
+//         ->first();
+
+//     if (!$generatedContent) {
+//         return response()->json(['error' => 'No generated content available'], 422);
+//     }
+
+//     $steps = collect($task->steps)->map(function ($step) use ($generatedContent) {
+//         if ($step['action'] === 'inputCaption') {
+//             $step['text'] = json_decode($generatedContent->response, true)['caption'] ?? '';
+//         }
+//         if ($step['action'] === 'uploadImage') {
+//             $step['image_url'] = $generatedContent->image_url ?? '';
+//         }
+//         return $step;
+//     })->values()->all();
+
+//     return response()->json([
+//         'social_account_id' => $socialAccount->id,
+//         'username' => $socialAccount->username,
+//         'steps' => $steps,
+//     ]);
+// });
+
+Route::get('/debug/manual-trigger', function () {
+    $androidId = '4848a0b2885cb392';
+    $taskId = 7;
+    $accountIds = [6];
+
+    Cache::put("trigger_for_{$androidId}", $taskId, now()->addMinutes(10));
+    Cache::put("queue_for_{$androidId}", $accountIds, now()->addMinutes(10));
+
+    return '✅ Trigger & queue manually set';
+});
+
+Route::get('/debug/test-cache-store', function () {
+    $key = 'trigger_for_test123';
+    $value = 'hello';
+    
+    Cache::put($key, $value, now()->addMinutes(10));
+    $fromDefault = Cache::get($key);
+
+    $fromExplicitDatabase = Cache::store('database')->get($key);
+    $fromFile = Cache::store('file')->get($key);
+
+    return [
+        'saved' => $value,
+        'from_default' => $fromDefault,
+        'from_database' => $fromExplicitDatabase,
+        'from_file' => $fromFile,
+        'cache_driver' => config('cache.default'),
+    ];
+});
+
+
 Route::get('/device/{androidId}', function ($androidId) {
     $taskId = Cache::get("trigger_for_{$androidId}");
     if (!$taskId) {
+        Log::info("❌ Tidak ada trigger untuk android_id: {$androidId}");
         return response()->noContent();
     }
 
     $task = AutomationTask::find($taskId);
-    $device = Device::where('android_id', $androidId)->first();
-    if (!$device) {
-        return response()->json(['error' => 'Device not found'], 404);
-    }
-
-    // Ambil queue akun sosial dari cache
-    $queueKey = "queue_for_{$androidId}";
-    $queue = Cache::get($queueKey, []);
-
-    // Jika queue kosong, hapus trigger dan return kosong
-    if (empty($queue)) {
+    if (!$task) {
+        Log::warning("❌ AutomationTask ID {$taskId} tidak ditemukan.");
         Cache::forget("trigger_for_{$androidId}");
         return response()->noContent();
     }
 
-    // Pop satu akun dari queue
+    $device = Device::where('android_id', $androidId)->first();
+    if (!$device) {
+        Log::warning("❌ Device dengan android_id {$androidId} tidak ditemukan.");
+        return response()->json(['error' => 'Device not found'], 404);
+    }
+
+    $queueKey = "queue_for_{$androidId}";
+    $queue = Cache::get($queueKey, []);
+
+    if (empty($queue)) {
+        Log::info("📭 Queue kosong untuk {$androidId}");
+        Cache::forget("trigger_for_{$androidId}");
+        return response()->noContent();
+    }
+
     $socialAccountId = array_shift($queue);
     Cache::put($queueKey, $queue, now()->addMinutes(10));
 
     $socialAccount = \App\Models\SocialAccount::find($socialAccountId);
+    if (!$socialAccount) {
+        Log::warning("❌ SocialAccount ID {$socialAccountId} tidak ditemukan.");
+        return response()->json(['error' => 'Akun tidak ditemukan'], 404);
+    }
+
     $generatedContent = \App\Models\GeneratedContent::where('social_account_id', $socialAccountId)
         ->where('status', 'draft')
         ->latest()
         ->first();
 
     if (!$generatedContent) {
+        Log::info("❌ Tidak ada generated content untuk account {$socialAccount->username}");
         return response()->json(['error' => 'No generated content available'], 422);
     }
 
-    $steps = collect($task->steps)->map(function ($step) use ($generatedContent) {
+    $responseArray = json_decode($generatedContent->response, true) ?? [];
+
+    $steps = collect($task->steps)->map(function ($step) use ($responseArray, $generatedContent) {
         if ($step['action'] === 'inputCaption') {
-            $step['text'] = json_decode($generatedContent->response, true)['caption'] ?? '';
+            $step['text'] = $responseArray['caption'] ?? '';
         }
         if ($step['action'] === 'uploadImage') {
             $step['image_url'] = $generatedContent->image_url ?? '';
         }
         return $step;
     })->values()->all();
+
+    Log::info("✅ Automation berhasil disiapkan untuk device {$androidId} dan akun {$socialAccount->username}");
 
     return response()->json([
         'social_account_id' => $socialAccount->id,
