@@ -13,13 +13,18 @@ if (!auto.service) {
   auto.waitFor();
 }
 
+if (!requestScreenCapture()) {
+    toast("Gagal meminta izin screenshot!");
+    writeLog("❌ Tidak dapat meminta screenshot permission");
+    exit();
+}
+
 function mediaScan(filePath) {
     app.sendBroadcast({
         action: android.intent.action.MEDIA_SCANNER_SCAN_FILE,
         data: "file://" + filePath
     });
 }
-
 
 function downloadImage(url, savePath) {
     try {
@@ -48,6 +53,60 @@ function downloadImage(url, savePath) {
     return false;
 }
 
+function getTodayFilename() {
+    let now = new Date();
+    let yyyy = now.getFullYear();
+    let mm = (now.getMonth() + 1).toString().padStart(2, "0");
+    let dd = now.getDate().toString().padStart(2, "0");
+    let hh = now.getHours().toString().padStart(2, "0");
+    let min = now.getMinutes().toString().padStart(2, "0");
+    let ss = now.getSeconds().toString().padStart(2, "0");
+    return `${yyyy}${mm}${dd}_${hh}${min}${ss}`;
+}
+  
+function getBaseUrl() {
+const path = "/sdcard/server_url.txt";
+return files.exists(path) ? files.read(path).trim() : null;
+}
+  
+// 🧠 Handler untuk screenshot_only mode
+function handleScreenshotOnly() {
+    writeLog("📸 Menjalankan screenshot_only...");
+
+    let filename = "Screenshot_" + getTodayFilename() + ".png";
+    let file = "/sdcard/DCIM/Screenshots/" + filename;
+
+    try {
+        images.captureScreen(file);
+        writeLog("💾 Screenshot disimpan langsung di: " + file);
+    } catch (e) {
+        writeLog("❌ Gagal menyimpan screenshot: " + e);
+        return;
+    }
+
+    let serverUrl = getBaseUrl();
+    if (!serverUrl) {
+        writeLog("❌ Server URL tidak ditemukan");
+        return;
+    }
+
+    let r = http.postMultipart(serverUrl + "/api/screenshot", {
+        android_id: device.getAndroidId(),
+        image: open(file)
+    });
+
+    writeLog("📤 Upload status: " + r.statusCode + ", " + r.body.string());
+
+    toast("✅ Screenshot selesai");
+    sleep(1000); 
+    exit(); // keluar setelah 1 aksi
+}
+
+
+  // ✅ Cek jika steps adalah ["screenshot_only"]
+if (steps.length === 1 && typeof steps[0] === "string" && steps[0] === "screenshot_only") {
+    handleScreenshotOnly();
+  }
 
 for (let step of steps) {
   try {
@@ -177,7 +236,9 @@ for (let step of steps) {
               writeLog("Menampilkan All Apps (Aksesibilitas)");
               break;
            
-            
+            case "takeScreenshot":
+                handleScreenshotOnly();
+                break;
           default:
               toast("❓ Tidak dikenal: " + step.action);
               writeLog(`Aksi tidak dikenal: ${step.action}`);

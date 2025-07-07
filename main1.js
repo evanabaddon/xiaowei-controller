@@ -2,28 +2,23 @@
 
 const CONFIG_PATH = "/sdcard/server_url.txt";
 
-// ✅ Tampilkan UI Setup
+// ✅ Layout UI sederhana dan aman
 ui.layout(
-  <vertical padding="16">
-  
-    <text text="🌐 Setup Server Automator" textSize="20sp" />
-    <input id="serverInput" hint="https://example.com" />
-    <button id="saveBtn" />
-    
+  <vertical padding="16" bg="#FAFAFA">
+    <text text="🌐 Setup Server" textSize="20sp" textColor="#212121" marginBottom="12"/>
+    <input id="serverInput" hint="https://example.com" textColor="#000000" />
+    <button id="saveBtn" text="💾 Simpan dan Jalankan" marginTop="16"/>
+    <text text="© 2025 UtasAutoListener" gravity="center" textSize="12sp" textColor="#999999" marginTop="32"/>
   </vertical>
 );
 
-
-// ⛏️ Set tombol setelah layout untuk hindari entity ref error
-ui.saveBtn.setText("💾 Simpan dan Jalankan");
-
-// 🔁 Load URL jika sudah tersimpan
+// 🔁 Load URL dari file jika ada
 if (files.exists(CONFIG_PATH)) {
   let saved = files.read(CONFIG_PATH);
   ui.serverInput.setText(saved.trim());
 }
 
-// 🚀 Ketika tombol disimpan
+// 🟢 Klik tombol
 ui.saveBtn.click(() => {
   let url = ui.serverInput.text().trim();
   if (!url.startsWith("http")) {
@@ -34,15 +29,12 @@ ui.saveBtn.click(() => {
   files.write(CONFIG_PATH, url);
   toast("✅ URL disimpan");
 
-  // ✅ Jalankan di thread, beri delay agar tidak error network
   threads.start(() => {
-    toast("⏳ Menyiapkan koneksi...");
-    sleep(1000);
     runListener(url);
   });
 });
 
-// 🧠 Fungsi utama
+// 🔧 Fungsi utama listener
 function runListener(baseUrl) {
   toast("🟢 Listener aktif");
   log("🌐 Server URL: " + baseUrl);
@@ -61,11 +53,8 @@ function runListener(baseUrl) {
   const registerUrl = baseUrl + "/register-device";
   const taskUrl = baseUrl + "/device/" + androidId;
 
-  // 🌐 Registrasi device
+  // 🌐 Registrasi
   try {
-    log("📡 Registrasi ke: " + registerUrl);
-    sleep(1000); // penting agar tidak crash
-
     let res = http.postJson(registerUrl, {
       android_id: androidId,
       model,
@@ -73,11 +62,11 @@ function runListener(baseUrl) {
       manufacturer
     });
 
+    log("📡 Registrasi ke: " + registerUrl);
     log("📥 Status: " + res.statusCode);
 
     if (res.statusCode !== 200 && res.statusCode !== 201) {
-      log("❌ Body: " + res.body.string());
-      toast("❌ Registrasi gagal: " + res.statusCode);
+      toast("❌ Registrasi gagal");
       return;
     }
 

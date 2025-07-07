@@ -67,30 +67,16 @@ class Device extends Model
         }
     }
 
-    public function getLastScreenshot(): ?string
+    public function triggerScreenshot(Device $device)
     {
-        $client = WebSocketPool::getClient($this->machine->ws_url);
-        if (!$client) return null;
+        Cache::put("screenshot_only_for_{$device->android_id}", true, now()->addSeconds(10));
 
-        try {
-            $client->send(json_encode([
-                'action' => 'screen',
-                'devices' => $this->serial,
-                'data' => ['savePath' => "D:\\Pictures"],
-            ]));
-
-            $response = json_decode($client->receive(), true);
-            if ($response['code'] !== 10000) return null;
-
-            $imagePath = "D:\\Pictures\\{$this->serial}.png";
-            if (!file_exists($imagePath)) return null;
-
-            return 'data:image/png;base64,' . base64_encode(file_get_contents($imagePath));
-        } catch (\Exception $e) {
-            Log::warning("⚠️ Screenshot error for {$this->serial}: {$e->getMessage()}");
-            return null;
-        }
+        Notification::make()
+            ->title("Perintah Screenshot dikirim ke device.")
+            ->success()
+            ->send();
     }
+
 
     /**
      * Status koneksi internet perangkat.

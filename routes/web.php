@@ -206,6 +206,15 @@ Route::get('/debug/test-cache-store', function () {
 
 
 Route::get('/device/{androidId}', function ($androidId) {
+    // ✅ Prioritaskan trigger langsung (misal screenshot_only)
+     if (Cache::pull("screenshot_only_for_{$androidId}")) {
+        return response()->json([
+            'steps' => [
+                ['action' => 'takeScreenshot'],
+            ],
+        ]);
+    }
+
     $taskId = Cache::get("trigger_for_{$androidId}");
     if (!$taskId) {
         Log::info("❌ Tidak ada trigger untuk android_id: {$androidId}");
@@ -316,4 +325,23 @@ Route::post('/register-device', function (Request $request) {
     ]);
 
     return response()->json(['success' => true, 'device_id' => $deviceToFill->id]);
+});
+
+Route::post('/api/screenshot', function (Request $request) {
+    $androidId = $request->input('android_id');
+
+    if (!$request->hasFile('image') || !$androidId) {
+        return response()->json(['error' => 'Missing data'], 422);
+    }
+
+    $path = $request->file('image')->storeAs("screenshots", $androidId . ".jpg", "public");
+
+    Cache::put("screenshot_image_for_{$androidId}", "/storage/" . $path, now()->addMinutes(5));
+
+    return response()->json([
+        'status' => 'ok',
+        'path' => $path,
+    ])->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+      ->header('Pragma', 'no-cache')
+      ->header('Expires', '0');
 });

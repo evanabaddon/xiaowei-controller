@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'stripe/*',
             'register-device',
             'device/*',
+            'api/screenshot',
         ]);
     })
     ->withSchedule(function (Schedule $schedule): void {

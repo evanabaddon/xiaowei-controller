@@ -2,17 +2,19 @@
 
 namespace App\Filament\Resources;
 
-use App\Filament\Resources\DeviceResource\Pages;
+use Filament\Tables;
 use App\Models\Device;
 use App\Models\Machine;
 use Filament\Forms\Form;
-use Filament\Notifications\Notification;
-use Filament\Resources\Resource;
-use Filament\Tables;
-use Filament\Tables\Actions\Action as ActionsAction;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Filament\Resources\Resource;
+use Forms\Components\Placeholder;
+use Filament\Forms\Components\View;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Notifications\Notification;
+use Filament\Tables\Filters\SelectFilter;
+use App\Filament\Resources\DeviceResource\Pages;
+use Filament\Tables\Actions\Action as ActionsAction;
 
 class DeviceResource extends Resource
 {
@@ -46,10 +48,10 @@ class DeviceResource extends Resource
                 TextColumn::make('machine.name')->label('Machine')->searchable(),
                 TextColumn::make('serial')->searchable(),
                 TextColumn::make('android_id')->searchable(),
-                TextColumn::make('name')
-                    ->label('Name')
-                    ->formatStateUsing(fn ($state, $record) => "{$record->id}-{$record->model}-{$record->machine->name}")
-                    ->searchable(),
+                // TextColumn::make('name')
+                //     ->label('Name')
+                //     ->formatStateUsing(fn ($state, $record) => "{$record->id}-{$record->model}-{$record->machine->name}")
+                //     ->searchable(),
 
                 TextColumn::make('model')->searchable(),
 
@@ -90,6 +92,16 @@ class DeviceResource extends Resource
                     ->label('Status'),
             ])
             ->actions([
+                ActionsAction::make('Screenshot')
+                    ->label('Screenshot')
+                    ->icon('heroicon-m-device-phone-mobile')
+                    ->modalHeading('Tangkapan Layar')
+                    ->modalContent(fn ($record) => view('filament.resources.device-resource.modals.screenshot', [
+                        'deviceId' => $record->id,
+                    ]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelAction(false), // tambahan opsional
+
                 ActionsAction::make('apps')
                     ->label('Installed Apps')
                     ->icon('heroicon-m-rectangle-stack')
