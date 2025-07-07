@@ -276,11 +276,18 @@ Route::get('/device/{androidId}', function ($androidId) {
 
     Log::info("✅ Automation berhasil disiapkan untuk device {$androidId} dan akun {$socialAccount->username}");
 
+    // Tandai sebagai published
+    $generatedContent->update([
+        'status' => 'published',
+    ]);
+
     return response()->json([
         'social_account_id' => $socialAccount->id,
         'username' => $socialAccount->username,
         'steps' => $steps,
     ]);
+
+
 });
 
 

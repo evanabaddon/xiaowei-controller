@@ -95,10 +95,13 @@ class GenerateContentForAccountJob implements ShouldQueue
 
             Log::info("✅ [GenerateContent] Konten berhasil disimpan untuk {$account->username}");
             // 🔄 Update last_generated_at di task yang relevan
-            ContentTask::whereJsonContains('social_account_ids', $account->id)
-            ->where('mode', 'scheduled')
-            ->where('active', 1)
-            ->update(['last_generated_at' => now()]);
+            ContentTask::query()
+                ->where('mode', 'scheduled')
+                ->where('active', 1)
+                ->get()
+                ->filter(fn ($task) => in_array($account->id, $task->social_account_ids ?? []))
+                ->each(fn ($task) => $task->update(['last_generated_at' => now()]));
+
         }
     }
 

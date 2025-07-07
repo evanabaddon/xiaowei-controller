@@ -94,6 +94,7 @@ class ContentTaskResource extends Resource
                 TextColumn::make('automationTask.name'),
                 TextColumn::make('mode'),
                 TextColumn::make('daily_quota'),
+                TextColumn::make('last_generated_at')->since(),
                 IconColumn::make('active')
                     ->label('Aktif')
                     ->boolean()

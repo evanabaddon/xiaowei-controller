@@ -245,7 +245,7 @@ class AutomationTaskResource extends Resource
                 Tables\Columns\IconColumn::make('apply_to_all')
                     ->boolean()->label('Semua Device'),
                 Tables\Columns\TextColumn::make('mode')->badge(),
-                Tables\Columns\TextColumn::make('created_at')->since()->sortable(),
+                Tables\Columns\TextColumn::make('last_dispatched_at')->since()->sortable(),
             ])
             ->filters([
                 //
