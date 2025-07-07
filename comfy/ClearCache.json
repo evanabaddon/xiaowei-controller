@@ -1,0 +1,36 @@
+{
+  "1": {
+    "inputs": {
+      "anything": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "easy clearCacheAll",
+    "_meta": {
+      "title": "Clear Cache All"
+    }
+  },
+  "3": {
+    "inputs": {
+      "literal": "albedobaseXL_v21.safetensors\njapaneseStyleRealistic_v20.safetensors\njuggernautXL_v9Rundiffusionphoto2.safetensors\nmajicmixRealistic_v7.safetensors\nrealisticVisionV60B1_v60B1VAE.safetensors\nrealvisxlV40_v40Bakedvae.safetensors\nrealvisxlV50_v50LightningBakedvae.safetensors\nsvd.safetensors\nsvd_xt.safetensors\nsvd_xt_1_1.safetensors\nwanAIWan21VideoModelSafetensors_kijaiWan21T2V14B.safetensors\nzavychromaxl_v80.safetensors"
+    },
+    "class_type": "Checkpoint",
+    "_meta": {
+      "title": "Checkpoint"
+    }
+  },
+  "4": {
+    "inputs": {
+      "preview": "albedobaseXL_v21.safetensors",
+      "source": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "Preview Any"
+    }
+  }
+}

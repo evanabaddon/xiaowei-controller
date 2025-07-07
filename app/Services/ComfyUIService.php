@@ -9,6 +9,23 @@ class ComfyUIService
 {
     protected string $baseUrl = 'https://cui.h4ckmuka.online';
 
+
+    public function clearCache(): void
+    {
+        $json = json_decode(file_get_contents(base_path('comfy/ClearCache.json')), true);
+
+        $response = Http::withoutVerifying()->post("{$this->baseUrl}/prompt", [
+            'prompt' => $json,
+        ]);
+
+        if (!$response->ok()) {
+            Log::error('[ComfyUI] Failed to clear cache: ' . $response->body());
+            throw new \Exception('Gagal clear cache ComfyUI.');
+        }
+
+        Log::info('[ComfyUI] Cache berhasil dibersihkan.');
+    }
+
     public function generateImage(string $prompt,int $seed): array
     {
         $json = json_decode(file_get_contents(base_path('comfy/BaseRealVis.json')), true);

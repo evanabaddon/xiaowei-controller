@@ -68,25 +68,47 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
                 ->send();
             return;
         }
-        
+    
         $this->isLoading = true;
-
+    
         try {
             $comfy = new ComfyUIService();
-
+    
+            // Clear Cache
+            $comfy->clearCache();
+            sleep(2); // delay setelah clear
+    
             Log::info('[Form Input] Prompt: ' . $this->prompt);
             Log::info('[Form Input] Seed: ' . $this->seed);
-
+    
             $usedSeed = $this->seed ?: random_int(1, 999999999999);
-
+    
             $response = $comfy->generateImage($this->prompt, $usedSeed);
+            Log::info('[ComfyUI] Generate Response: ', $response);
+    
             $promptId = $response['prompt_id'] ?? null;
-
-            if ($promptId) {
-                sleep(4);
-                $this->imageUrl = $comfy->getImageByPromptId($promptId);
+    
+            if (!$promptId) {
+                throw new \Exception('Prompt ID tidak ditemukan di response.');
             }
-
+    
+            // retry 5x setiap 2 detik
+            $maxAttempts = 5;
+            $attempt = 0;
+            $imageUrl = null;
+    
+            while ($attempt < $maxAttempts && !$imageUrl) {
+                sleep(2);
+                $imageUrl = $comfy->getImageByPromptId($promptId);
+                $attempt++;
+            }
+    
+            if (!$imageUrl) {
+                throw new \Exception('Gagal mengambil gambar dari ComfyUI.');
+            }
+    
+            $this->imageUrl = $imageUrl;
+    
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Error')
@@ -97,4 +119,5 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
             $this->isLoading = false;
         }
     }
+    
 }
