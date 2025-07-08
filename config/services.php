@@ -44,4 +44,8 @@ return [
         'model' => env('OLLAMA_MODEL', 'llama3'),
     ],
 
+    'comfy' => [
+        'url' => env('COMFY_URL'),
+    ],
+
 ];

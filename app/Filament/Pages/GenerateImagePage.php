@@ -1,15 +1,17 @@
 <?php
 namespace App\Filament\Pages;
 
-use Filament\Pages\Page;
 use Filament\Forms;
+use Filament\Pages\Page;
 use App\Services\ComfyUIService;
-use Illuminate\Support\Facades\Log;
+use App\Services\GeminiAIService;
 use Filament\Forms\Components\Grid;
+use Illuminate\Support\Facades\Log;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Section;
-use Filament\Notifications\Notification;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Forms\Components\Actions\Action;
 
 
@@ -21,6 +23,7 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
     public $imageUrl;
     public $isLoading = false;
     public $seed;
+    public $generatedPrompt;
 
     protected static string $view = 'filament.pages.generate-image-page';
 
@@ -46,7 +49,10 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
                             ->numeric()
                             ->placeholder('Optional'),
                     ]),
-
+                    Textarea::make('generatedPrompt')
+                        ->label('Auto Prompting')
+                        ->rows(3)
+                        ->readOnly(),
                     Actions::make([
                         Action::make('Generate')
                             ->action('generateImage')
@@ -77,13 +83,25 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
             // Clear Cache
             $comfy->clearCache();
             sleep(2); // delay setelah clear
+
+            // Step 2: Generate Prompt from Gemini
+            $gemini = new GeminiAIService();
+            $instruction = "kamu adalah AI yang membantu membuatkan prompt text to image dengan base model SDXL, jika saya berikan konteks, maka kamu akan membalas string 1 prompt text berbahasa inggris yang relevan dengan konteks nya. jika kamu akan membuat karakter, jaga agar tetap menghasilkan karakter orang Indonesia tanpa ada tambahan kalimat lainya";
+            $fullPrompt = "{$instruction}\n\nkonteks : {$this->prompt}";
+
+            $generated = $gemini->generateGeminiResponse($fullPrompt);
+            $this->generatedPrompt = $generated;
+
+            // Step 3: Generate Image with ComfyUI
     
             Log::info('[Form Input] Prompt: ' . $this->prompt);
             Log::info('[Form Input] Seed: ' . $this->seed);
     
-            $usedSeed = $this->seed ?: random_int(1, 999999999999);
+            if (empty($this->seed)) {
+                $this->seed = random_int(1, 999999999999);
+            }
     
-            $response = $comfy->generateImage($this->prompt, $usedSeed);
+            $response = $comfy->generateImage($generated, $this->seed);
             Log::info('[ComfyUI] Generate Response: ', $response);
     
             $promptId = $response['prompt_id'] ?? null;
@@ -106,7 +124,9 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
             if (!$imageUrl) {
                 throw new \Exception('Gagal mengambil gambar dari ComfyUI.');
             }
-    
+
+            Log::info('[Filament] generatedPrompt is:', [$this->generatedPrompt]);
+
             $this->imageUrl = $imageUrl;
     
         } catch (\Throwable $e) {

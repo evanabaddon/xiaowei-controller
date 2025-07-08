@@ -7,8 +7,17 @@ use Illuminate\Support\Facades\Log;
 
 class ComfyUIService
 {
-    protected string $baseUrl = 'https://cui.h4ckmuka.online';
+    protected string $baseUrl;
 
+    public function __construct()
+    {
+        $this->baseUrl = config('services.comfy.url');
+
+        if (empty($this->baseUrl)) {
+            Log::critical('[ComfyUI] config("services.comfy.url") is empty. Please check your config/services.php or .env');
+            throw new \Exception('ComfyUI base URL tidak diset di konfigurasi.');
+        }
+    }
 
     public function clearCache(): void
     {
@@ -32,7 +41,7 @@ class ComfyUIService
         $json["6"]["inputs"]["text"] = $prompt;
         $json["3"]["inputs"]["seed"] = $seed; 
 
-        $response = Http::withoutVerifying()->post('https://cui.h4ckmuka.online/prompt', [
+        $response = Http::withoutVerifying()->post("{$this->baseUrl}/prompt", [
             'prompt' => $json
         ]);
 
