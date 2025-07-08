@@ -81,12 +81,12 @@ class GenerateImagePage extends Page implements Forms\Contracts\HasForms
             $comfy = new ComfyUIService();
     
             // Clear Cache
-            $comfy->clearCache();
-            sleep(2); // delay setelah clear
+            // $comfy->clearCache();
+            // sleep(2); // delay setelah clear
 
             // Step 2: Generate Prompt from Gemini
             $gemini = new GeminiAIService();
-            $instruction = "kamu adalah AI yang membantu membuatkan prompt text to image dengan base model SDXL, jika saya berikan konteks, maka kamu akan membalas string 1 prompt text berbahasa inggris yang relevan dengan konteks nya. jika kamu akan membuat karakter, jaga agar tetap menghasilkan karakter orang Indonesia tanpa ada tambahan kalimat lainya";
+            $instruction = "kamu adalah AI yang membantu membuatkan prompt text to image dengan base model SDXL, jika saya berikan konteks, maka kamu akan membalas string 1 prompt text berbahasa inggris yang relevan dengan konteks nya. jika kamu akan membuat karakter, jaga agar tetap menghasilkan karakter orang Indonesia tanpa ada tambahan kalimat lainya, selalu gunakan nuansa Indonesia. Hindari menggunakan banyak karakter";
             $fullPrompt = "{$instruction}\n\nkonteks : {$this->prompt}";
 
             $generated = $gemini->generateGeminiResponse($fullPrompt);

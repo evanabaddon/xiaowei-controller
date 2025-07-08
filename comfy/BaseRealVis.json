@@ -2,7 +2,7 @@
   "3": {
     "inputs": {
       "seed": 665494916805033,
-      "steps": 8,
+      "steps": 6,
       "cfg": 2,
       "sampler_name": "dpmpp_sde",
       "scheduler": "karras",
@@ -64,7 +64,7 @@
   },
   "7": {
     "inputs": {
-      "text": "text, watermark, ugly",
+      "text": "(octane render, render, drawing, anime, bad photo, bad photography:1.3), (worst quality, low quality, blurry:1.2), (bad teeth, deformed teeth, deformed lips), (bad anatomy, bad proportions:1.1), (deformed iris, deformed pupils), (deformed eyes, bad eyes), (deformed face, ugly face, bad face), (deformed hands, bad hands, fused fingers), morbid, mutilated, mutation, disfigured",
       "clip": [
         "4",
         1
