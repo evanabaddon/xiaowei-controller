@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Enum\ContentTone;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
